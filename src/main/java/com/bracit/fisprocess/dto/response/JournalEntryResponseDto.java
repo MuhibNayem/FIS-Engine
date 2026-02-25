@@ -1,0 +1,35 @@
+package com.bracit.fisprocess.dto.response;
+
+import com.bracit.fisprocess.domain.enums.JournalStatus;
+import lombok.Builder;
+import lombok.Data;
+import org.jspecify.annotations.Nullable;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+/**
+ * Response DTO for Journal Entry details.
+ */
+@Data
+@Builder
+public class JournalEntryResponseDto {
+
+    private UUID journalEntryId;
+    private LocalDate postedDate;
+    private JournalStatus status;
+    @Nullable
+    private String description;
+    @Nullable
+    private String referenceId;
+    private String transactionCurrency;
+    private String baseCurrency;
+    private BigDecimal exchangeRate;
+    private int lineCount;
+    @Nullable
+    private UUID reversalOfId;
+    private String createdBy;
+    private OffsetDateTime createdAt;
+}

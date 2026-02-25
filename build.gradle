@@ -1,0 +1,86 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.3'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id "io.freefair.lombok" version "9.2.0"
+}
+
+group = 'com.bracit'
+version = '0.0.1-SNAPSHOT'
+description = 'fis-process'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.testcontainers:testcontainers-bom:1.20.6"
+    }
+}
+
+dependencies {
+    // --- Core Spring Boot Starters ---
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+
+    // --- H2 Console (Dev/Test) ---
+    implementation 'org.springframework.boot:spring-boot-h2console'
+    runtimeOnly 'com.h2database:h2'
+
+    // --- PostgreSQL (Production) ---
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // --- Flyway (Schema Migration) ---
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    // --- Mapping & Null Safety ---
+    implementation 'org.modelmapper:modelmapper:3.2.2'
+    implementation 'org.jspecify:jspecify:1.0.0'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // --- Test Dependencies ---
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jdbc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // --- Testcontainers ---
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:rabbitmq'
+    testImplementation 'com.redis:testcontainers-redis:2.2.4'
+    testImplementation 'org.testcontainers:junit-jupiter'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+
+    // Docker Desktop socket configuration for Testcontainers
+    def dockerSocketPath = "${System.getProperty('user.home')}/.docker/desktop/docker.sock"
+    def dockerSocket = file(dockerSocketPath)
+    if (dockerSocket.exists()) {
+        environment 'DOCKER_HOST', "unix://${dockerSocketPath}"
+        environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', dockerSocketPath
+        environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
+    }
+}
