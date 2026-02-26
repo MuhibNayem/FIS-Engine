@@ -12,19 +12,15 @@ import com.bracit.fisprocess.exception.JournalEntryNotFoundException;
 import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
-import com.bracit.fisprocess.service.ActorRoleResolver;
 import com.bracit.fisprocess.service.JournalEntryService;
-import com.bracit.fisprocess.service.JournalEntryValidationService;
-import com.bracit.fisprocess.service.LedgerPersistenceService;
-import com.bracit.fisprocess.service.MultiCurrencyService;
-import com.bracit.fisprocess.service.OutboxService;
-import com.bracit.fisprocess.service.PeriodValidationService;
+import com.bracit.fisprocess.service.JournalWorkflowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,13 +38,11 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
     private final JournalEntryRepository journalEntryRepository;
     private final BusinessEntityRepository businessEntityRepository;
-    private final JournalEntryValidationService validationService;
-    private final LedgerPersistenceService ledgerPersistenceService;
-    private final PeriodValidationService periodValidationService;
-    private final MultiCurrencyService multiCurrencyService;
-    private final ActorRoleResolver actorRoleResolver;
-    private final OutboxService outboxService;
+    private final JournalPostingEngine journalPostingEngine;
+    private final JournalWorkflowService journalWorkflowService;
     private final ModelMapper modelMapper;
+    @Value("${fis.approval.threshold-cents:9223372036854775807}")
+    private long approvalThresholdCents;
 
     @Override
     @Transactional
@@ -61,29 +55,11 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         BusinessEntity tenant = businessEntityRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(tenantId.toString()));
 
-        // 2. Validate accounting period by posting date.
-        periodValidationService.validatePostingAllowed(
-                tenantId,
-                request.getPostedDate(),
-                actorRoleResolver.resolve(actorRoleHeader));
-
-        // 3. Build draft from request
         DraftJournalEntry draft = buildDraft(tenantId, tenant, request);
-
-        // 4. Apply FX conversion / base amount derivation.
-        draft = multiCurrencyService.apply(draft);
-
-        // 5. Validate double-entry rules
-        validationService.validate(draft);
-
-        // 6. Persist atomically (hash chain + balance updates)
-        JournalEntry persisted = ledgerPersistenceService.persist(draft);
-
-        // 7. Emit immutable domain event via transactional outbox.
-        outboxService.recordJournalPosted(tenantId, request.getEventId(), persisted, traceparent);
-
-        // 8. Map to response
-        return toResponseDto(persisted);
+        if (requiresApproval(draft)) {
+            return journalWorkflowService.createDraft(tenantId, request, traceparent);
+        }
+        return journalPostingEngine.post(tenantId, draft, actorRoleHeader, traceparent);
     }
 
     @Override
@@ -122,6 +98,17 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         DraftJournalLine line = modelMapper.map(dto, DraftJournalLine.class);
         line.setBaseAmountCents(dto.getAmountCents());
         return line;
+    }
+
+    private boolean requiresApproval(DraftJournalEntry draft) {
+        if (approvalThresholdCents <= 0) {
+            return false;
+        }
+        long totalDebits = draft.getLines().stream()
+                .filter(line -> !line.isCredit())
+                .mapToLong(DraftJournalLine::getAmountCents)
+                .sum();
+        return totalDebits >= approvalThresholdCents;
     }
 
     private JournalEntryResponseDto toResponseDto(JournalEntry entry) {

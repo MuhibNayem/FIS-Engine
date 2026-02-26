@@ -4,6 +4,7 @@ import com.bracit.fisprocess.AbstractIntegrationTest;
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.AccountingPeriod;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
+import com.bracit.fisprocess.domain.entity.ExchangeRate;
 import com.bracit.fisprocess.domain.enums.AccountType;
 import com.bracit.fisprocess.domain.enums.PeriodStatus;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryRequestDto;
@@ -12,6 +13,7 @@ import com.bracit.fisprocess.dto.request.JournalLineRequestDto;
 import com.bracit.fisprocess.repository.AccountRepository;
 import com.bracit.fisprocess.repository.AccountingPeriodRepository;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
+import com.bracit.fisprocess.repository.ExchangeRateRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,6 +61,8 @@ class LedgerAdvancedFeaturesIntegrationTest extends AbstractIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     @Autowired
     private JournalEntryRepository journalEntryRepository;
+    @Autowired
+    private ExchangeRateRepository exchangeRateRepository;
 
     private UUID tenantId;
     private UUID periodId;
@@ -87,6 +91,15 @@ class LedgerAdvancedFeaturesIntegrationTest extends AbstractIntegrationTest {
         saveAccount("FX_REVAL_RESERVE", AccountType.ASSET, "USD");
         saveAccount("FX_UNREALIZED_GAIN", AccountType.REVENUE, "USD");
         saveAccount("FX_UNREALIZED_LOSS", AccountType.EXPENSE, "USD");
+
+        exchangeRateRepository.save(ExchangeRate.builder()
+                .tenantId(tenantId)
+                .sourceCurrency("EUR")
+                .targetCurrency("USD")
+                .rate(new java.math.BigDecimal("1.10"))
+                .effectiveDate(LocalDate.of(2026, 2, 1))
+                .createdAt(OffsetDateTime.now())
+                .build());
     }
 
     @Test
@@ -274,6 +287,30 @@ class LedgerAdvancedFeaturesIntegrationTest extends AbstractIntegrationTest {
 
         JsonNode secondJson = jsonMapper.readTree(second);
         assertThat(secondJson.get("runId").asText()).isEqualTo(firstJson.get("runId").asText());
+    }
+
+    @Test
+    void shouldPostRealizedFxGainFromSettlement() throws Exception {
+        UUID original = createJournalEntry("EVT-P5-SETTLE-ORIG", "EUR", "CASH_EUR", "REV_EUR", 10_000L);
+
+        mockMvc.perform(post("/v1/settlements")
+                        .header("X-Tenant-Id", tenantId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "eventId":"EVT-P5-SETTLE-1",
+                                  "originalJournalEntryId":"%s",
+                                  "settlementDate":"2026-02-28",
+                                  "settlementRate":1.30,
+                                  "monetaryAccountCode":"CASH_EUR",
+                                  "gainAccountCode":"FX_UNREALIZED_GAIN",
+                                  "lossAccountCode":"FX_UNREALIZED_LOSS",
+                                  "createdBy":"phase5-test"
+                                }
+                                """.formatted(original)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.realizedGainLossJournalEntryId").isNotEmpty())
+                .andExpect(jsonPath("$.realizedDeltaBaseCents").value(2000));
     }
 
     @Test

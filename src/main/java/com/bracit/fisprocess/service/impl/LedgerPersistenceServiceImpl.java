@@ -12,6 +12,7 @@ import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.AccountRepository;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
+import com.bracit.fisprocess.repository.JournalSequenceRepository;
 import com.bracit.fisprocess.service.HashChainService;
 import com.bracit.fisprocess.service.LedgerLockingService;
 import com.bracit.fisprocess.service.LedgerPersistenceService;
@@ -41,6 +42,7 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
     private final JournalEntryRepository journalEntryRepository;
     private final AccountRepository accountRepository;
     private final BusinessEntityRepository businessEntityRepository;
+    private final JournalSequenceRepository journalSequenceRepository;
     private final HashChainService hashChainService;
     private final LedgerLockingService ledgerLockingService;
     private final MeterRegistry meterRegistry;
@@ -66,6 +68,8 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
         String hash = hashChainService.computeHash(journalEntryId, previousHash, createdAt);
 
         // 2. Build the JournalEntry entity
+        int fiscalYear = draft.getPostedDate().getYear();
+        long sequenceNumber = allocateSequenceNumber(draft.getTenantId(), fiscalYear);
         JournalEntry journalEntry = JournalEntry.builder()
                 .id(journalEntryId)
                 .tenantId(draft.getTenantId())
@@ -82,6 +86,8 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
                 .createdAt(createdAt)
                 .previousHash(previousHash)
                 .hash(hash)
+                .fiscalYear(fiscalYear)
+                .sequenceNumber(sequenceNumber)
                 .build();
 
         // 3. Add journal lines
@@ -115,6 +121,19 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
         return journalEntry;
     }
 
+    private long allocateSequenceNumber(UUID tenantId, int fiscalYear) {
+        var sequence = journalSequenceRepository.findForUpdate(tenantId, fiscalYear)
+                .orElseGet(() -> journalSequenceRepository.save(
+                        com.bracit.fisprocess.domain.entity.JournalSequence.builder()
+                                .id(new com.bracit.fisprocess.domain.entity.JournalSequenceId(tenantId, fiscalYear))
+                                .nextValue(1L)
+                                .build()));
+        long allocated = sequence.getNextValue();
+        sequence.setNextValue(allocated + 1);
+        journalSequenceRepository.save(sequence);
+        return allocated;
+    }
+
     /**
      * Updates account balances with deterministic lock ordering (sorted by account
      * code)
@@ -131,7 +150,7 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
                     .findByTenantIdAndCode(draft.getTenantId(), line.getAccountCode())
                     .orElseThrow(() -> new AccountNotFoundException(line.getAccountCode()));
 
-            long delta = computeBalanceDelta(account.getAccountType(), line.getAmountCents(), line.isCredit());
+            long delta = computeBalanceDelta(account.getAccountType(), account.isContra(), line.getAmountCents(), line.isCredit());
             ledgerLockingService.updateAccountBalance(account.getAccountId(), delta);
         }
     }
@@ -145,8 +164,11 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
      * <li>LIABILITY, EQUITY, REVENUE: Credit increases, Debit decreases</li>
      * </ul>
      */
-    private long computeBalanceDelta(AccountType accountType, long amount, boolean isCredit) {
+    private long computeBalanceDelta(AccountType accountType, boolean isContra, long amount, boolean isCredit) {
         boolean isNormalDebit = accountType == AccountType.ASSET || accountType == AccountType.EXPENSE;
+        if (isContra) {
+            isNormalDebit = !isNormalDebit;
+        }
 
         if (isNormalDebit) {
             return isCredit ? -amount : amount;

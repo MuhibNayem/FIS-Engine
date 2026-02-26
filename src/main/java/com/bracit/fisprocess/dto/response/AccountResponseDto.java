@@ -27,6 +27,7 @@ public class AccountResponseDto {
     private Long currentBalanceCents;
     private String formattedBalance;
     private boolean isActive;
+    private boolean contra;
 
     @Nullable
     private String parentAccountCode;

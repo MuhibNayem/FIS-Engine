@@ -3,11 +3,16 @@ package com.bracit.fisprocess.controller;
 import com.bracit.fisprocess.domain.enums.JournalStatus;
 import com.bracit.fisprocess.dto.request.CorrectionRequestDto;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryRequestDto;
+import com.bracit.fisprocess.dto.request.ApproveWorkflowRequestDto;
+import com.bracit.fisprocess.dto.request.RejectWorkflowRequestDto;
 import com.bracit.fisprocess.dto.request.ReversalRequestDto;
+import com.bracit.fisprocess.dto.request.SubmitWorkflowRequestDto;
 import com.bracit.fisprocess.dto.response.JournalEntryResponseDto;
 import com.bracit.fisprocess.dto.response.ReversalResponseDto;
+import com.bracit.fisprocess.dto.response.JournalWorkflowActionResponseDto;
 import com.bracit.fisprocess.service.JournalReversalService;
 import com.bracit.fisprocess.service.JournalEntryService;
+import com.bracit.fisprocess.service.JournalWorkflowService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -37,6 +42,7 @@ public class JournalEntryController {
 
     private final JournalEntryService journalEntryService;
     private final JournalReversalService journalReversalService;
+    private final JournalWorkflowService journalWorkflowService;
 
     @PostMapping
     public ResponseEntity<JournalEntryResponseDto> createJournalEntry(
@@ -88,5 +94,33 @@ public class JournalEntryController {
             @Valid @RequestBody CorrectionRequestDto request) {
         ReversalResponseDto response = journalReversalService.correct(tenantId, id, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/{id}/submit")
+    public ResponseEntity<JournalWorkflowActionResponseDto> submitWorkflow(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id,
+            @Valid @RequestBody SubmitWorkflowRequestDto request) {
+        JournalWorkflowActionResponseDto response = journalWorkflowService.submit(tenantId, id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<JournalWorkflowActionResponseDto> approveWorkflow(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader(value = "X-Actor-Role", required = false) @Nullable String actorRole,
+            @PathVariable UUID id,
+            @Valid @RequestBody ApproveWorkflowRequestDto request) {
+        JournalWorkflowActionResponseDto response = journalWorkflowService.approve(tenantId, id, request, actorRole);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<JournalWorkflowActionResponseDto> rejectWorkflow(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id,
+            @Valid @RequestBody RejectWorkflowRequestDto request) {
+        JournalWorkflowActionResponseDto response = journalWorkflowService.reject(tenantId, id, request);
+        return ResponseEntity.ok(response);
     }
 }

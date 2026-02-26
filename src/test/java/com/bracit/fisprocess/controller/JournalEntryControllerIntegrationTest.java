@@ -113,6 +113,15 @@ class JournalEntryControllerIntegrationTest extends AbstractIntegrationTest {
                                 .accountType(AccountType.EXPENSE)
                                 .currencyCode("USD")
                                 .build());
+
+                accountRepository.save(Account.builder()
+                                .tenantId(tenantId)
+                                .code("ACC_DEP")
+                                .name("Accumulated Depreciation")
+                                .accountType(AccountType.ASSET)
+                                .currencyCode("USD")
+                                .isContra(true)
+                                .build());
         }
 
         private String toJson(Object obj) throws Exception {
@@ -251,6 +260,41 @@ class JournalEntryControllerIntegrationTest extends AbstractIntegrationTest {
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content("{}"))
                                         .andExpect(status().isBadRequest());
+                }
+
+                @Test
+                @DisplayName("should apply contra-account polarity for balance updates")
+                void shouldApplyContraAccountPolarity() throws Exception {
+                        String eventId = "EVT-CONTRA-" + UUID.randomUUID().toString().substring(0, 8);
+                        CreateJournalEntryRequestDto contraEntry = CreateJournalEntryRequestDto.builder()
+                                        .eventId(eventId)
+                                        .postedDate(LocalDate.of(2026, 2, 25))
+                                        .description("Contra account test")
+                                        .transactionCurrency("USD")
+                                        .createdBy("integration-test")
+                                        .lines(List.of(
+                                                        JournalLineRequestDto.builder()
+                                                                        .accountCode("EXPENSE")
+                                                                        .amountCents(10000L)
+                                                                        .isCredit(false)
+                                                                        .build(),
+                                                        JournalLineRequestDto.builder()
+                                                                        .accountCode("ACC_DEP")
+                                                                        .amountCents(10000L)
+                                                                        .isCredit(true)
+                                                                        .build()))
+                                        .build();
+
+                        mockMvc.perform(post("/v1/journal-entries")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(contraEntry)))
+                                        .andExpect(status().isCreated());
+
+                        mockMvc.perform(get("/v1/accounts/{accountCode}", "ACC_DEP")
+                                        .header("X-Tenant-Id", tenantId.toString()))
+                                        .andExpect(status().isOk())
+                                        .andExpect(jsonPath("$.currentBalanceCents", is(10000)));
                 }
         }
 

@@ -8,10 +8,11 @@ import org.springframework.http.HttpStatus;
 public class UnbalancedEntryException extends FisBusinessException {
 
     public UnbalancedEntryException(long totalDebits, long totalCredits) {
-        super(
-                String.format("Journal entry is unbalanced: total debits = %d, total credits = %d",
-                        totalDebits, totalCredits),
-                HttpStatus.UNPROCESSABLE_ENTITY,
-                "/problems/unbalanced-entry");
+        this(String.format("Journal entry is unbalanced: total debits = %d, total credits = %d",
+                totalDebits, totalCredits));
+    }
+
+    public UnbalancedEntryException(String detailMessage) {
+        super(detailMessage, HttpStatus.UNPROCESSABLE_ENTITY, "/problems/unbalanced-entry");
     }
 }

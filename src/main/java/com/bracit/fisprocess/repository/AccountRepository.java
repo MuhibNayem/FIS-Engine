@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -61,4 +62,12 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
                         WHERE account_id = :accountId
                         """, nativeQuery = true)
         int lockAndUpdateBalance(@Param("accountId") UUID accountId, @Param("delta") Long delta);
+
+        @Query(value = """
+                        SELECT account_type, COALESCE(SUM(current_balance), 0)
+                        FROM fis_account
+                        WHERE tenant_id = :tenantId
+                        GROUP BY account_type
+                        """, nativeQuery = true)
+        List<Object[]> sumBalancesByType(@Param("tenantId") UUID tenantId);
 }

@@ -83,6 +83,10 @@ public class Account {
     @Builder.Default
     private boolean isActive = true;
 
+    @Column(name = "is_contra", nullable = false)
+    @Builder.Default
+    private boolean isContra = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

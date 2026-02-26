@@ -36,4 +36,7 @@ public class CreateAccountRequestDto {
 
     @Nullable
     private String parentAccountCode;
+
+    @Builder.Default
+    private boolean contra = false;
 }

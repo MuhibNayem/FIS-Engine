@@ -32,6 +32,13 @@ public class JournalEntryValidationServiceImpl implements JournalEntryValidation
     }
 
     private void validateDebitCreditBalance(DraftJournalEntry draft) {
+        long debitLineCount = draft.getLines().stream().filter(line -> !line.isCredit()).count();
+        long creditLineCount = draft.getLines().stream().filter(DraftJournalLine::isCredit).count();
+        if (debitLineCount == 0 || creditLineCount == 0) {
+            throw new UnbalancedEntryException(
+                    "Journal entry must contain at least one debit line and at least one credit line.");
+        }
+
         long totalDebits = draft.getLines().stream()
                 .filter(line -> !line.isCredit())
                 .mapToLong(DraftJournalLine::getAmountCents)

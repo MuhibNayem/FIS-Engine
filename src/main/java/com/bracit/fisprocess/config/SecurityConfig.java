@@ -49,10 +49,13 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/openapi.yaml", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/v1/admin/**").hasRole("FIS_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/v1/**").hasAnyRole("FIS_READER", "FIS_ACCOUNTANT", "FIS_ADMIN")
                         .requestMatchers(HttpMethod.POST, "/v1/events", "/v1/journal-entries", "/v1/journal-entries/*/reverse",
-                                "/v1/journal-entries/*/correct")
+                                "/v1/journal-entries/*/correct", "/v1/journal-entries/*/submit", "/v1/settlements")
                         .hasAnyRole("FIS_ACCOUNTANT", "FIS_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/v1/journal-entries/*/approve", "/v1/journal-entries/*/reject")
+                        .hasRole("FIS_ADMIN")
                         .requestMatchers(HttpMethod.POST, "/v1/revaluations/**", "/v1/mapping-rules", "/v1/accounting-periods",
                                 "/v1/exchange-rates", "/v1/accounts")
                         .hasRole("FIS_ADMIN")

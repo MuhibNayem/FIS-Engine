@@ -146,6 +146,29 @@ class JournalEntryValidationServiceImplTest {
                         assertThatThrownBy(() -> validationService.validate(draft))
                                         .isInstanceOf(UnbalancedEntryException.class);
                 }
+
+                @Test
+                @DisplayName("should reject single-sided entry with no credit lines")
+                void shouldRejectSingleSidedEntry() {
+                        DraftJournalEntry draft = DraftJournalEntry.builder()
+                                        .tenantId(TENANT_ID)
+                                        .eventId("EVT-004")
+                                        .postedDate(LocalDate.now())
+                                        .transactionCurrency("USD")
+                                        .baseCurrency("USD")
+                                        .createdBy("test-user")
+                                        .lines(List.of(
+                                                        DraftJournalLine.builder()
+                                                                        .accountCode("CASH")
+                                                                        .amountCents(10000L)
+                                                                        .isCredit(false)
+                                                                        .build()))
+                                        .build();
+
+                        assertThatThrownBy(() -> validationService.validate(draft))
+                                        .isInstanceOf(UnbalancedEntryException.class)
+                                        .hasMessageContaining("at least one debit line");
+                }
         }
 
         @Nested

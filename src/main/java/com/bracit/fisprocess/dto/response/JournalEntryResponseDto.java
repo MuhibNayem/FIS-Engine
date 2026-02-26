@@ -36,4 +36,8 @@ public class JournalEntryResponseDto {
     private UUID reversalOfId;
     private String createdBy;
     private OffsetDateTime createdAt;
+    @Nullable
+    private Integer fiscalYear;
+    @Nullable
+    private Long sequenceNumber;
 }

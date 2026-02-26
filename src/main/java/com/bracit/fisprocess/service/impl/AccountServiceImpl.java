@@ -68,6 +68,7 @@ public class AccountServiceImpl implements AccountService {
                         "name", saved.getName(),
                         "accountType", saved.getAccountType().name(),
                         "currencyCode", saved.getCurrencyCode(),
+                        "isContra", saved.isContra(),
                         "isActive", saved.isActive()),
                 performedBy);
 
@@ -105,6 +106,7 @@ public class AccountServiceImpl implements AccountService {
         Map<String, Object> oldValue = Map.of(
                 "code", account.getCode(),
                 "name", account.getName(),
+                "isContra", account.isContra(),
                 "isActive", account.isActive());
         applyUpdates(account, request);
         Account updated = accountRepository.save(account);
@@ -120,6 +122,7 @@ public class AccountServiceImpl implements AccountService {
                 Map.of(
                         "code", updated.getCode(),
                         "name", updated.getName(),
+                        "isContra", updated.isContra(),
                         "isActive", updated.isActive()),
                 performedBy);
 

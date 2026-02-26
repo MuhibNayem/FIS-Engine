@@ -97,6 +97,12 @@ public class JournalEntry implements Persistable<UUID> {
     @Column(nullable = false)
     private String hash;
 
+    @Column(name = "fiscal_year", nullable = false)
+    private Integer fiscalYear;
+
+    @Column(name = "sequence_number", nullable = false)
+    private Long sequenceNumber;
+
     @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<JournalLine> lines = new ArrayList<>();
