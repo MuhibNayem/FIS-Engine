@@ -3,6 +3,7 @@ package com.bracit.fisprocess.service.impl;
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.model.DraftJournalEntry;
 import com.bracit.fisprocess.domain.model.DraftJournalLine;
+import com.bracit.fisprocess.exception.AccountCurrencyMismatchException;
 import com.bracit.fisprocess.exception.AccountNotFoundException;
 import com.bracit.fisprocess.exception.InactiveAccountException;
 import com.bracit.fisprocess.exception.UnbalancedEntryException;
@@ -11,6 +12,8 @@ import com.bracit.fisprocess.service.JournalEntryValidationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.Locale;
 
 /**
  * Validates that a draft Journal Entry satisfies double-entry accounting rules.
@@ -49,6 +52,7 @@ public class JournalEntryValidationServiceImpl implements JournalEntryValidation
     }
 
     private void validateAccountsExistAndActive(DraftJournalEntry draft) {
+        String transactionCurrency = draft.getTransactionCurrency().toUpperCase(Locale.ROOT);
         for (DraftJournalLine line : draft.getLines()) {
             Account account = accountRepository
                     .findByTenantIdAndCode(draft.getTenantId(), line.getAccountCode())
@@ -56,6 +60,10 @@ public class JournalEntryValidationServiceImpl implements JournalEntryValidation
 
             if (!account.isActive()) {
                 throw new InactiveAccountException(line.getAccountCode());
+            }
+            String accountCurrency = account.getCurrencyCode().toUpperCase(Locale.ROOT);
+            if (!accountCurrency.equals(transactionCurrency)) {
+                throw new AccountCurrencyMismatchException(line.getAccountCode(), accountCurrency, transactionCurrency);
             }
         }
     }

@@ -8,10 +8,12 @@ import tools.jackson.databind.json.JsonMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.temporal.TemporalAccessor;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 
 /**
  * Deterministic SHA-256 hash implementation based on canonical JSON.
@@ -48,6 +50,9 @@ public class PayloadHashServiceImpl implements PayloadHashService {
         }
         if (value instanceof String || value instanceof Number || value instanceof Boolean || value == null) {
             return value;
+        }
+        if (value instanceof UUID || value instanceof Enum<?> || value instanceof TemporalAccessor) {
+            return String.valueOf(value);
         }
         Object normalized = jsonMapper.convertValue(value, LinkedHashMap.class);
         return canonicalize(normalized);

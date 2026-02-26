@@ -2,11 +2,14 @@ package com.bracit.fisprocess.controller;
 
 import com.bracit.fisprocess.AbstractIntegrationTest;
 import com.bracit.fisprocess.domain.entity.Account;
+import com.bracit.fisprocess.domain.entity.AccountingPeriod;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.enums.AccountType;
+import com.bracit.fisprocess.domain.enums.PeriodStatus;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryRequestDto;
 import com.bracit.fisprocess.dto.request.JournalLineRequestDto;
 import com.bracit.fisprocess.repository.AccountRepository;
+import com.bracit.fisprocess.repository.AccountingPeriodRepository;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +52,8 @@ class JournalEntryControllerIntegrationTest extends AbstractIntegrationTest {
 
         @Autowired
         private AccountRepository accountRepository;
+        @Autowired
+        private AccountingPeriodRepository accountingPeriodRepository;
 
         @Autowired
         private JsonMapper jsonMapper;
@@ -66,6 +71,14 @@ class JournalEntryControllerIntegrationTest extends AbstractIntegrationTest {
                                 .build();
                 BusinessEntity savedTenant = businessEntityRepository.save(tenant);
                 tenantId = savedTenant.getTenantId();
+
+                accountingPeriodRepository.save(AccountingPeriod.builder()
+                                .tenantId(tenantId)
+                                .name("2026-02")
+                                .startDate(LocalDate.of(2026, 2, 1))
+                                .endDate(LocalDate.of(2026, 2, 28))
+                                .status(PeriodStatus.OPEN)
+                                .build());
 
                 // Create test accounts
                 accountRepository.save(Account.builder()

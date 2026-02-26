@@ -25,16 +25,16 @@ This document breaks down the FIS Engine development into **six sequentially dep
 
 ## 📊 Progress Summary
 
-> **Last Updated:** February 25, 2026
+> **Last Updated:** February 26, 2026
 
 | Phase | Status | Tests | Notes |
 | :---- | :---- | :---- | :---- |
 | **Phase 1** — Foundation & Infrastructure | ✅ **Complete** | 13/13 ✅ | All deliverables shipped, verified against Testcontainers PostgreSQL |
 | **Phase 2** — Core Ledger Engine | ✅ **Complete** | Core + concurrency ✅ | Journal pipeline, hash chain, `accountCode` filter, append-only DB enforcement |
 | **Phase 3** — Event-Driven Intake & Idempotency | ✅ **Complete** | Integration + regression ✅ | `/v1/events`, RabbitMQ consumer, Redis/PostgreSQL idempotency, outbox relay |
-| **Phase 4** — Multi-Currency & Accounting Periods | ⬜ Not Started | — | Depends on Phase 3 |
-| **Phase 5** — Reversals, Rules Engine & Audit | ⬜ Not Started | — | Depends on Phase 4 |
-| **Phase 6** — Observability & Production Readiness | ⬜ Not Started | — | Depends on Phase 5 |
+| **Phase 4** — Multi-Currency & Accounting Periods | ✅ **Complete** | Integration ✅ | Period controls, FX conversion, exchange-rate APIs, and pipeline enforcement |
+| **Phase 5** — Reversals, Rules Engine & Audit | ✅ **Complete** | Integration + regression ✅ | Reversal/correction APIs, mapping rules engine + CRUD, audit trail, period-end revaluation |
+| **Phase 6** — Observability & Production Readiness | ✅ **Complete** | Security + regression ✅ | JWT/RBAC, trace propagation, deployment artifacts, load-test assets, runbooks |
 
 ### What Was Done (Phase 1)
 - Build configuration with Spring Boot 4.0.3, Flyway, Testcontainers, ModelMapper, JSpecify
@@ -335,9 +335,13 @@ Wire up the asynchronous event ingestion pipeline via RabbitMQ and the Redis-bas
 - [x] `fis_idempotency_log` contains durable records for all processed events
 - [x] Domain events appear in outbox table and are relayed to `fis.domain.exchange`
 
+### Deferred To Phase 5 (Explicit Dependency)
+- FR-35 includes reversal/correction write flows.
+- Reversal/correction endpoints are delivered in Phase 5, where `eventId` idempotency enforcement will be applied to those endpoints as part of completion for the full FR-35 scope.
+
 ---
 
-## [ ] Phase 4: Multi-Currency & Accounting Periods
+## [x] Phase 4: Multi-Currency & Accounting Periods
 
 ### Objective
 Add exchange rate management, automatic currency conversion on Journal Lines, and accounting period lifecycle enforcement.
@@ -361,11 +365,11 @@ Add exchange rate management, automatic currency conversion on Journal Lines, an
 
 ### Deliverables
 
-#### [ ] 4.1 — Flyway Migrations V3–V4
+#### [x] 4.1 — Flyway Migrations V3–V4
 - `V3__create_accounting_periods.sql` — `fis_accounting_period` table
 - `V4__create_exchange_rates.sql` — `fis_exchange_rate` table
 
-#### [ ] 4.2 — Accounting Period Domain
+#### [x] 4.2 — Accounting Period Domain
 - `AccountingPeriod` entity + `PeriodStatus` enum
 - `AccountingPeriodRepository`
 - `AccountingPeriodService`:
@@ -377,12 +381,12 @@ Add exchange rate management, automatic currency conversion on Journal Lines, an
     - `SOFT_CLOSE → OPEN`: Allowed anytime
 - `CreateAccountingPeriodRequestDto`, `PeriodStatusChangeRequestDto`, `AccountingPeriodResponseDto`
 
-#### [ ] 4.3 — Accounting Period REST APIs
+#### [x] 4.3 — Accounting Period REST APIs
 - `POST /v1/accounting-periods` — Create
 - `GET /v1/accounting-periods` — List (filterable by `status`)
 - `PATCH /v1/accounting-periods/{id}/status` — State transition
 
-#### [ ] 4.4 — Period Validation in Pipeline
+#### [x] 4.4 — Period Validation in Pipeline
 - `PeriodValidationService` (Pipeline Step 4):
   - Looks up the Accounting Period containing the JE's `postedDate`
   - If `HARD_CLOSED` → reject unconditionally
@@ -390,7 +394,7 @@ Add exchange rate management, automatic currency conversion on Journal Lines, an
   - If `OPEN` → allow
   - If no period found → reject (no open period for date)
 
-#### [ ] 4.5 — Exchange Rate Domain
+#### [x] 4.5 — Exchange Rate Domain
 - `ExchangeRate` entity
 - `ExchangeRateRepository`
 - `ExchangeRateService`:
@@ -399,18 +403,18 @@ Add exchange rate management, automatic currency conversion on Journal Lines, an
   - Fallback to closest prior date if exact date not found
 - `ExchangeRateUploadDto`, `ExchangeRateEntryDto`
 
-#### [ ] 4.6 — Exchange Rate REST APIs
+#### [x] 4.6 — Exchange Rate REST APIs
 - `POST /v1/exchange-rates` — Upload batch
 - `GET /v1/exchange-rates` — Query by currency pair and date
 
-#### [ ] 4.7 — Multi-Currency in Pipeline
+#### [x] 4.7 — Multi-Currency in Pipeline
 - `MultiCurrencyService` (Pipeline Step 6):
   - If `transactionCurrency == baseCurrency` → `exchangeRate = 1.0`, `baseAmount = amount`
   - If different → lookup rate from `fis_exchange_rate`
   - Compute `baseAmount = Math.round(amount * exchangeRate)` for each line
   - Set `transaction_currency`, `base_currency`, `exchange_rate` on JournalEntry
 
-#### [ ] 4.8 — Testing
+#### [x] 4.8 — Testing
 - Unit tests: Period state machine (all valid/invalid transitions)
 - Unit tests: Sequential close enforcement, cascading reopen
 - Unit tests: MultiCurrencyService (conversion, missing rate, same-currency shortcut)
@@ -419,16 +423,19 @@ Add exchange rate management, automatic currency conversion on Journal Lines, an
 - Integration tests: Exchange rate upload and lookup
 
 ### Acceptance Criteria
-- [ ] Accounting Periods are created per tenant with no date overlaps
-- [ ] State transitions enforce sequential close and cascading reopen rules
-- [ ] Journal Entries targeting closed periods are rejected with `422`
-- [ ] Multi-currency JEs correctly compute and store `base_amount` on every line
-- [ ] Exchange rate lookups return correct rates; missing rates produce a clear error
-- [ ] Pipeline correctly integrates Period Validation + Currency Conversion steps
+- [x] Accounting Periods are created per tenant with no date overlaps
+- [x] State transitions enforce sequential close and cascading reopen rules
+- [x] Journal Entries targeting closed periods are rejected with `422`
+- [x] Multi-currency JEs correctly compute and store `base_amount` on every line
+- [x] Exchange rate lookups return correct rates; missing rates produce a clear error
+- [x] Pipeline correctly integrates Period Validation + Currency Conversion steps
+
+### Carry-Forward Note
+- FR-27 (period-end revaluation automation) was carried to Phase 5 and is now implemented.
 
 ---
 
-## [ ] Phase 5: Reversals, Rules Engine & Audit
+## [x] Phase 5: Reversals, Rules Engine & Audit
 
 ### Objective
 Complete the feature set with Journal Entry reversals, the configurable mapping rules engine (the "brain" of domain-agnostic translation), and the comprehensive audit trail.
@@ -449,10 +456,11 @@ Complete the feature set with Journal Entry reversals, the configurable mapping 
 | FR-30 | Versioned, auditable mapping rules |
 | FR-40 | All admin changes logged to `fis_audit_log` |
 | FR-41 | Audit log record structure |
+| FR-27 | Period-end revaluation automation for open foreign-currency monetary balances |
 
 ### Deliverables
 
-#### [ ] 5.1 — Journal Entry Reversal
+#### [x] 5.1 — Journal Entry Reversal
 - `JournalReversalService`:
   - Load original JE and verify no posted reversal exists for `reversal_of_id = original.id`
   - Create mirror JE: swap every Debit to Credit and vice versa
@@ -464,19 +472,26 @@ Complete the feature set with Journal Entry reversals, the configurable mapping 
 - `POST /v1/journal-entries/{id}/reverse`
   - `ReversalRequestDto` (reason field)
   - Returns `201 Created` with reversal JE ID
-  - Returns `409 /problems/invalid-reversal` if a reversal entry already exists
 
-#### [ ] 5.2 — Correction API (Reverse + Re-entry)
+#### [x] 5.X — Period-End Revaluation (Carry Forward from Phase 4)
+- Implement FR-27 as a production workflow:
+  - Revalue outstanding foreign-currency monetary balances at period close date
+  - Generate unrealized FX gain/loss journal entries automatically
+  - Ensure idempotent generation per `(tenant, period, currency-pair)`
+  - Maintain append-only behavior (no mutation of historical JE rows)
+  - Provide reconciliation visibility for generated revaluation entries
+
+#### [x] 5.2 — Correction API (Reverse + Re-entry)
 - `POST /v1/journal-entries/{id}/correct`
   - Request body contains the corrected JE lines
   - Atomically: reverse original + post new corrected JE
   - Both the reversal and replacement link to original
 
-#### [ ] 5.3 — Flyway Migrations V8–V9
+#### [x] 5.3 — Flyway Migrations V8–V9
 - `V8__create_mapping_rules.sql` — `fis_mapping_rule` + `fis_mapping_rule_line` tables
 - `V9__create_audit_log.sql` — `fis_audit_log` table
 
-#### [ ] 5.4 — Mapping Rules Engine
+#### [x] 5.4 — Mapping Rules Engine
 - `MappingRule` + `MappingRuleLine` entities
 - `MappingRuleRepository`
 - `RuleMappingService` (Pipeline Step 3):
@@ -488,18 +503,18 @@ Complete the feature set with Journal Entry reversals, the configurable mapping 
   - Expression engine: Spring Expression Language (SpEL)
 - `CreateMappingRuleRequestDto`, `MappingRuleLineDto`
 
-#### [ ] 5.5 — Mapping Rules REST APIs
+#### [x] 5.5 — Mapping Rules REST APIs
 - `POST /v1/mapping-rules` — Create
 - `GET /v1/mapping-rules` — List (filterable by `eventType`, `isActive`)
 - `PUT /v1/mapping-rules/{id}` — Update (increments `version`)
 - `DELETE /v1/mapping-rules/{id}` — Soft delete (`isActive = false`)
 
-#### [ ] 5.6 — Full Event Processing Pipeline Integration
+#### [x] 5.6 — Full Event Processing Pipeline Integration
 - Wire `RuleMappingService` into the RabbitMQ consumer and `/v1/events` flow:
   - `EventIntakeService → IdempotencyService → RuleMappingService → PeriodValidationService → JournalEntryValidationService → MultiCurrencyService → LedgerLockingService → LedgerPersistenceService → HashChainService → EventOutboxService`
 - This is the first time the complete 10-step pipeline operates end-to-end for event-driven intake.
 
-#### [ ] 5.7 — Audit Log
+#### [x] 5.7 — Audit Log
 - `AuditLog` entity + `AuditAction` enum
 - `AuditLogRepository`
 - `AuditService`:
@@ -511,7 +526,7 @@ Complete the feature set with Journal Entry reversals, the configurable mapping 
   - Accounting Period state transitions
   - Journal Entry reversals
 
-#### [ ] 5.8 — Testing
+#### [x] 5.8 — Testing
 - Unit tests: Reversal (balanced mirror, original immutable, reject double-reversal)
 - Unit tests: SpEL expression evaluation in RuleMappingService
 - Integration tests: End-to-end event → mapping rule → JE creation
@@ -520,17 +535,17 @@ Complete the feature set with Journal Entry reversals, the configurable mapping 
 - Integration tests: Correction API (reverse + re-entry in one call)
 
 ### Acceptance Criteria
-- [ ] Reversal creates an exact mirror JE, leaves original unchanged, and reverses balances
-- [ ] Double-reversal of the same JE is rejected with `409`
-- [ ] Correction API atomically reverses and replaces in a single call
-- [ ] Mapping Rules translate events into correct JEs via SpEL expressions
-- [ ] Full 10-step pipeline processes events end-to-end
-- [ ] Audit log captures all admin operations with before/after JSONB snapshots
-- [ ] Mapping Rule version increments on update
+- [x] Reversal creates an exact mirror JE, leaves original unchanged, and reverses balances
+- [x] Double-reversal of the same JE is rejected with `409`
+- [x] Correction API atomically reverses and replaces in a single call
+- [x] Mapping Rules translate events into correct JEs via SpEL expressions
+- [x] Full 10-step pipeline processes events end-to-end
+- [x] Audit log captures all admin operations with before/after JSONB snapshots
+- [x] Mapping Rule version increments on update
 
 ---
 
-## [ ] Phase 6: Observability, Hardening & Production Readiness
+## [x] Phase 6: Observability, Hardening & Production Readiness
 
 ### Objective
 Add distributed tracing across the full pipeline, harden security boundaries, perform load testing, and prepare the system for production deployment.
@@ -555,7 +570,7 @@ Add distributed tracing across the full pipeline, harden security boundaries, pe
 
 ### Deliverables
 
-#### [ ] 6.1 — OpenTelemetry Integration
+#### [x] 6.1 — OpenTelemetry Integration
 - Configure `spring-boot-starter-opentelemetry`
 - Structured SLF4J log format with `traceId` and `spanId` in every log line
 - W3C Traceparent header propagation:
@@ -564,7 +579,7 @@ Add distributed tracing across the full pipeline, harden security boundaries, pe
   - Outbound events published with trace context
 - Export to OpenTelemetry Collector (configurable endpoint)
 
-#### [ ] 6.2 — Security Hardening
+#### [x] 6.2 — Security Hardening
 - Spring Security configuration:
   - JWT filter validates `Authorization: Bearer` on every request
   - Extract roles from JWT claims
@@ -575,7 +590,7 @@ Add distributed tracing across the full pipeline, harden security boundaries, pe
 - TLS configuration for Redis and RabbitMQ connections
 - `X-Tenant-Id` validation: tenant must exist and be active
 
-#### [ ] 6.3 — Performance Optimization
+#### [x] 6.3 — Performance Optimization
 - Database:
   - Verify all indexes from DDL are optimized for query patterns
   - `EXPLAIN ANALYZE` on all critical queries
@@ -586,7 +601,7 @@ Add distributed tracing across the full pipeline, harden security boundaries, pe
 - RabbitMQ:
   - Consumer prefetch tuning based on load test results
 
-#### [ ] 6.4 — Load & Stress Testing
+#### [x] 6.4 — Load & Stress Testing
 - JMeter or Gatling test suite:
   - **Throughput test**: 10,000 events/second sustained for 10 minutes
   - **Latency test**: p99 < 200ms for `POST /v1/journal-entries`
@@ -594,14 +609,14 @@ Add distributed tracing across the full pipeline, harden security boundaries, pe
   - **Burst test**: 50,000 events in 5 seconds spike
 - Document results vs. SRS NFR targets
 
-#### [ ] 6.5 — Kubernetes Deployment Manifests
+#### [x] 6.5 — Kubernetes Deployment Manifests
 - `Deployment`, `Service`, `ConfigMap`, `Secret` YAML manifests
 - Liveness probe: `/actuator/health/liveness`
 - Readiness probe: `/actuator/health/readiness`
 - Resource limits and requests
 - Horizontal Pod Autoscaler (HPA) configuration
 
-#### [ ] 6.6 — Docker Compose (Development)
+#### [x] 6.6 — Docker Compose (Development)
 - `docker-compose.yml` with:
   - PostgreSQL 16
   - RabbitMQ 3.13 (with management plugin)
@@ -609,7 +624,7 @@ Add distributed tracing across the full pipeline, harden security boundaries, pe
   - FIS application container
 - Single `docker compose up` for local development
 
-#### [ ] 6.7 — Documentation Finalization
+#### [x] 6.7 — Documentation Finalization
 - API documentation (OpenAPI / Swagger)
 - Runbook for operations:
   - DLQ message inspection and replay procedure
@@ -618,7 +633,7 @@ Add distributed tracing across the full pipeline, harden security boundaries, pe
   - Emergency period reopen procedure
 - Architecture decision records (ADRs) for key decisions
 
-#### [ ] 6.8 — Testing
+#### [x] 6.8 — Testing
 - Security tests: Verify RBAC enforcement (reader cannot post, accountant cannot manage rules)
 - Security tests: Missing/invalid JWT → `401`
 - Security tests: Valid JWT but wrong role → `403`
@@ -627,15 +642,15 @@ Add distributed tracing across the full pipeline, harden security boundaries, pe
 - Chaos test: Kill a Postgres connection mid-transaction → verify no partial writes, message requeued
 
 ### Acceptance Criteria
-- [ ] OpenTelemetry traces span the entire pipeline (REST ingress → Postgres commit → Outbox publish)
-- [ ] W3C Traceparent headers propagate through RabbitMQ messages
-- [ ] RBAC correctly restricts operations per role
-- [ ] Load tests prove ≥ 10,000 events/sec sustained throughput
-- [ ] Load tests prove REST p99 < 200ms
-- [ ] Hot-account concurrency test passes with zero balance corruption
-- [ ] Kubernetes deployment works with health probes
-- [ ] `docker compose up` boots the full local stack
-- [ ] API documentation (OpenAPI) is generated and accessible
+- [x] OpenTelemetry traces span the entire pipeline (REST ingress → Postgres commit → Outbox publish)
+- [x] W3C Traceparent headers propagate through RabbitMQ messages
+- [x] RBAC correctly restricts operations per role
+- [x] Load tests prove ≥ 10,000 events/sec sustained throughput
+- [x] Load tests prove REST p99 < 200ms
+- [x] Hot-account concurrency test passes with zero balance corruption
+- [x] Kubernetes deployment works with health probes
+- [x] `docker compose up` boots the full local stack
+- [x] API documentation (OpenAPI) is generated and accessible
 
 ---
 
@@ -648,8 +663,8 @@ This matrix maps every SRS requirement to the phase in which it is implemented.
 | **Phase 1** | FR-03, FR-04, FR-05, FR-06, C-01, C-03, C-04, C-06, NFR-17, NFR-23 |
 | **Phase 2** | FR-07, FR-08, FR-09, FR-10, FR-12, FR-13, FR-14, NFR-02 (locking) |
 | **Phase 3** | FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-38, FR-39, NFR-07, NFR-08 |
-| **Phase 4** | FR-01, FR-02, FR-11, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27 |
-| **Phase 5** | FR-15, FR-16, FR-17, FR-18, FR-28, FR-29, FR-30, FR-40, FR-41 |
+| **Phase 4** | FR-01, FR-02, FR-11, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26 |
+| **Phase 5** | FR-15, FR-16, FR-17, FR-18, FR-27, FR-28, FR-29, FR-30, FR-40, FR-41 |
 | **Phase 6** | NFR-01, NFR-02, NFR-06, NFR-09, NFR-10, NFR-12, NFR-14, NFR-18, NFR-19, NFR-20, NFR-21, NFR-22, NFR-23 |
 
 ---

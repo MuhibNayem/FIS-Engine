@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 
 import java.util.UUID;
 
@@ -18,5 +19,7 @@ public class IngestionEnvelopeDto {
     private UUID tenantId;
     private String sourceSystem;
     private String payloadHash;
+    @Nullable
+    private String traceparent;
     private FinancialEventRequestDto event;
 }

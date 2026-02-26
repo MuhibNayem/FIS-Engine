@@ -2,6 +2,7 @@ package com.bracit.fisprocess.service;
 
 import com.bracit.fisprocess.dto.request.FinancialEventRequestDto;
 import com.bracit.fisprocess.dto.response.EventIngestionResponseDto;
+import org.jspecify.annotations.Nullable;
 
 import java.util.UUID;
 
@@ -10,5 +11,9 @@ import java.util.UUID;
  */
 public interface FinancialEventIngestionService {
 
-    EventIngestionResponseDto ingest(UUID tenantId, String sourceSystem, FinancialEventRequestDto request);
+    EventIngestionResponseDto ingest(
+            UUID tenantId,
+            String sourceSystem,
+            FinancialEventRequestDto request,
+            @Nullable String traceparent);
 }

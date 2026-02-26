@@ -1,0 +1,1039 @@
+openapi: 3.0.3
+info:
+  title: FIS Process API
+  version: v1
+  description: Complete REST API contract for the FIS ledger service.
+servers:
+  - url: /v1
+security:
+  - bearerAuth: []
+paths:
+  /events:
+    post:
+      summary: Ingest financial event
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/SourceSystemHeader'
+        - $ref: '#/components/parameters/TraceparentHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialEventRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventIngestionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/DuplicateIdempotencyKey'
+
+  /journal-entries:
+    post:
+      summary: Create manual journal entry
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorRoleHeader'
+        - $ref: '#/components/parameters/TraceparentHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJournalEntryRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+    get:
+      summary: List journal entries
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: postedDateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: postedDateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: accountCode
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [POSTED, REVERSAL, CORRECTION]
+        - name: referenceId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Journal entries page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryPage'
+
+  /journal-entries/{id}:
+    get:
+      summary: Get journal entry by id
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Journal entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /journal-entries/{id}/reverse:
+    post:
+      summary: Reverse posted journal entry
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReversalRequest'
+      responses:
+        '201':
+          description: Reversal posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReversalResponse'
+        '409':
+          $ref: '#/components/responses/InvalidReversal'
+
+  /journal-entries/{id}/correct:
+    post:
+      summary: Correct posted journal entry (reverse + replacement)
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectionRequest'
+      responses:
+        '201':
+          description: Correction completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReversalResponse'
+        '409':
+          $ref: '#/components/responses/InvalidReversal'
+
+  /accounts:
+    post:
+      summary: Create account
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+    get:
+      summary: List accounts
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: accountType
+          in: query
+          schema:
+            type: string
+            enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Account page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPage'
+
+  /accounts/{accountCode}:
+    get:
+      summary: Get account by code
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: accountCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      summary: Update account
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - name: accountCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+
+  /accounting-periods:
+    post:
+      summary: Create accounting period
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountingPeriodRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriodResponse'
+    get:
+      summary: List accounting periods
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, SOFT_CLOSED, HARD_CLOSED]
+      responses:
+        '200':
+          description: Accounting period list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountingPeriodResponse'
+
+  /accounting-periods/{periodId}/status:
+    patch:
+      summary: Change accounting period status
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PeriodStatusChangeRequest'
+      responses:
+        '200':
+          description: Updated period
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriodResponse'
+
+  /exchange-rates:
+    post:
+      summary: Upload exchange rates
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExchangeRateUploadRequest'
+      responses:
+        '201':
+          description: Uploaded rates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExchangeRateResponse'
+    get:
+      summary: Query exchange rates
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: sourceCurrency
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: targetCurrency
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: effectiveDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Matching rates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExchangeRateResponse'
+
+  /mapping-rules:
+    post:
+      summary: Create mapping rule
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMappingRuleRequest'
+      responses:
+        '201':
+          description: Created mapping rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingRuleResponse'
+    get:
+      summary: List mapping rules
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Mapping rule page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingRulePage'
+
+  /mapping-rules/{id}:
+    put:
+      summary: Update mapping rule
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMappingRuleRequest'
+      responses:
+        '200':
+          description: Updated mapping rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingRuleResponse'
+    delete:
+      summary: Deactivate mapping rule
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorIdHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deactivated
+
+  /revaluations/periods/{periodId}:
+    post:
+      summary: Run period-end revaluation
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunRevaluationRequest'
+      responses:
+        '201':
+          description: Revaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SourceSystemHeader:
+      name: X-Source-System
+      in: header
+      required: true
+      schema:
+        type: string
+    ActorRoleHeader:
+      name: X-Actor-Role
+      in: header
+      required: false
+      schema:
+        type: string
+    ActorIdHeader:
+      name: X-Actor-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    TraceparentHeader:
+      name: traceparent
+      in: header
+      required: false
+      schema:
+        type: string
+
+  responses:
+    ValidationFailed:
+      description: Validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Entity not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    DuplicateIdempotencyKey:
+      description: Duplicate idempotency key with conflicting payload
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvalidReversal:
+      description: Reversal is invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntity:
+      description: Business rule rejection
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+
+    JournalLineRequest:
+      type: object
+      required: [accountCode, amountCents, isCredit]
+      properties:
+        accountCode:
+          type: string
+        amountCents:
+          type: integer
+          format: int64
+        isCredit:
+          type: boolean
+        dimensions:
+          type: object
+          additionalProperties:
+            type: string
+
+    CreateJournalEntryRequest:
+      type: object
+      required: [eventId, postedDate, transactionCurrency, createdBy, lines]
+      properties:
+        eventId:
+          type: string
+        postedDate:
+          type: string
+          format: date
+        description:
+          type: string
+          nullable: true
+        referenceId:
+          type: string
+          nullable: true
+        transactionCurrency:
+          type: string
+        createdBy:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLineRequest'
+
+    JournalEntryResponse:
+      type: object
+      properties:
+        journalEntryId:
+          type: string
+          format: uuid
+        postedDate:
+          type: string
+          format: date
+        status:
+          type: string
+        description:
+          type: string
+          nullable: true
+        referenceId:
+          type: string
+          nullable: true
+        transactionCurrency:
+          type: string
+        baseCurrency:
+          type: string
+        exchangeRate:
+          type: number
+        lineCount:
+          type: integer
+        reversalOfId:
+          type: string
+          format: uuid
+          nullable: true
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    JournalEntryPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntryResponse'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+
+    ReversalRequest:
+      type: object
+      required: [eventId, reason, createdBy]
+      properties:
+        eventId:
+          type: string
+        reason:
+          type: string
+        createdBy:
+          type: string
+
+    CorrectionRequest:
+      type: object
+      required: [eventId, reversalEventId, postedDate, transactionCurrency, createdBy, lines]
+      properties:
+        eventId:
+          type: string
+        reversalEventId:
+          type: string
+        postedDate:
+          type: string
+          format: date
+        description:
+          type: string
+          nullable: true
+        referenceId:
+          type: string
+          nullable: true
+        transactionCurrency:
+          type: string
+        createdBy:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLineRequest'
+
+    ReversalResponse:
+      type: object
+      properties:
+        reversalJournalEntryId:
+          type: string
+          format: uuid
+        originalJournalEntryId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        message:
+          type: string
+
+    CreateAccountRequest:
+      type: object
+      required: [code, name, accountType, currencyCode]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        accountType:
+          type: string
+          enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+        currencyCode:
+          type: string
+        parentAccountCode:
+          type: string
+          nullable: true
+
+    UpdateAccountRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+          nullable: true
+
+    AccountResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        accountType:
+          type: string
+        currencyCode:
+          type: string
+        currentBalanceCents:
+          type: integer
+          format: int64
+        formattedBalance:
+          type: string
+        isActive:
+          type: boolean
+        parentAccountCode:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AccountPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountResponse'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+
+    CreateAccountingPeriodRequest:
+      type: object
+      required: [name, startDate, endDate]
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+
+    PeriodStatusChangeRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [OPEN, SOFT_CLOSED, HARD_CLOSED]
+
+    AccountingPeriodResponse:
+      type: object
+      properties:
+        periodId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+        closedBy:
+          type: string
+          nullable: true
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ExchangeRateEntry:
+      type: object
+      required: [sourceCurrency, targetCurrency, rate, effectiveDate]
+      properties:
+        sourceCurrency:
+          type: string
+        targetCurrency:
+          type: string
+        rate:
+          type: number
+        effectiveDate:
+          type: string
+          format: date
+
+    ExchangeRateUploadRequest:
+      type: object
+      required: [rates]
+      properties:
+        rates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExchangeRateEntry'
+
+    ExchangeRateResponse:
+      type: object
+      properties:
+        rateId:
+          type: string
+          format: uuid
+        sourceCurrency:
+          type: string
+        targetCurrency:
+          type: string
+        rate:
+          type: number
+        effectiveDate:
+          type: string
+          format: date
+
+    MappingRuleLine:
+      type: object
+      required: [accountCodeExpression, amountExpression]
+      properties:
+        accountCodeExpression:
+          type: string
+        isCredit:
+          type: boolean
+        amountExpression:
+          type: string
+        sortOrder:
+          type: integer
+
+    CreateMappingRuleRequest:
+      type: object
+      required: [eventType, createdBy, lines]
+      properties:
+        eventType:
+          type: string
+        description:
+          type: string
+          nullable: true
+        createdBy:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/MappingRuleLine'
+
+    UpdateMappingRuleRequest:
+      type: object
+      required: [eventType, updatedBy, lines]
+      properties:
+        eventType:
+          type: string
+        description:
+          type: string
+          nullable: true
+        updatedBy:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/MappingRuleLine'
+
+    MappingRuleResponse:
+      type: object
+      properties:
+        ruleId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        version:
+          type: integer
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/MappingRuleLine'
+
+    MappingRulePage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MappingRuleResponse'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+
+    FinancialEventRequest:
+      type: object
+      required: [eventId, eventType, occurredAt, postedDate, transactionCurrency, createdBy]
+      properties:
+        eventId:
+          type: string
+        eventType:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        postedDate:
+          type: string
+          format: date
+        description:
+          type: string
+          nullable: true
+        referenceId:
+          type: string
+          nullable: true
+        transactionCurrency:
+          type: string
+        createdBy:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLineRequest'
+        payload:
+          type: object
+          additionalProperties: true
+
+    EventIngestionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        ik:
+          type: string
+        message:
+          type: string
+
+    RunRevaluationRequest:
+      type: object
+      required: [eventId, createdBy, reserveAccountCode, gainAccountCode, lossAccountCode]
+      properties:
+        eventId:
+          type: string
+        createdBy:
+          type: string
+        reserveAccountCode:
+          type: string
+        gainAccountCode:
+          type: string
+        lossAccountCode:
+          type: string
+
+    RevaluationResponse:
+      type: object
+      properties:
+        periodId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        generatedJournalEntryIds:
+          type: array
+          items:
+            type: string
+            format: uuid

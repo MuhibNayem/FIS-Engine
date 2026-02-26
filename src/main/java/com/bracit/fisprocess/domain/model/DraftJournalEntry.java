@@ -2,6 +2,8 @@ package com.bracit.fisprocess.domain.model;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -16,7 +18,9 @@ import java.util.UUID;
  * and the persistence layer. Not a JPA entity.
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
+@NoArgsConstructor
+@AllArgsConstructor
 public class DraftJournalEntry {
 
     private UUID tenantId;

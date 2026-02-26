@@ -79,6 +79,11 @@ Processing pipeline:
 - `docs/06-messaging-topology.md` - RabbitMQ + Redis design.
 - `docs/07-domain-models.md` - Entities/DTOs/service contracts.
 - `docs/08-implementation-roadmap.md` - Phased implementation plan.
+- `deploy/k8s/` - Kubernetes manifests (deployment/service/config/secret/HPA).
+- `deploy/otel/` - OpenTelemetry Collector config.
+- `performance/k6/` - Load/stress test scripts.
+- `docs/runbooks/` - Operations runbooks.
+- `docs/runbooks/application-runbook.md` - Full production application runbook.
 
 ## Getting Started
 
@@ -123,6 +128,9 @@ Recommended configuration domains:
 - RFC 7807 `ProblemDetail` for all error payloads.
 - Monetary values are integer cents (`BIGINT`) or fixed precision (`NUMERIC`).
 - Posted financial history is append-only; corrections use compensating entries.
+- API documentation:
+  - OpenAPI spec: `/openapi.yaml`
+  - Swagger UI: `/swagger-ui.html`
 
 ## Immutability Model (Industry Standard)
 
@@ -174,8 +182,9 @@ Implemented and verified:
 - Phase 1 foundation and account APIs
 - Phase 2 core ledger engine (manual journal posting/query, hash chain, concurrency safety, append-only ledger enforcement)
 - Phase 3 event-driven intake and idempotency (REST `/v1/events`, RabbitMQ consumer with manual ack/nack, Redis + PostgreSQL idempotency log, transactional outbox relay)
-
-Pending phases (per roadmap): multi-currency periods, reversals/rules/audit hardening, and production observability expansion.
+- Phase 4 multi-currency + accounting periods
+- Phase 5 reversals/corrections + mapping rules + audit log + period-end revaluation
+- Phase 6 JWT/RBAC hardening, trace context propagation, deployment manifests, compose stack, and load-test assets
 
 ## Contribution Guidelines
 

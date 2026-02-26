@@ -2,6 +2,8 @@ package com.bracit.fisprocess.domain.model;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Map;
@@ -12,7 +14,9 @@ import java.util.Map;
  * Not a JPA entity.
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
+@NoArgsConstructor
+@AllArgsConstructor
 public class DraftJournalLine {
 
     private String accountCode;

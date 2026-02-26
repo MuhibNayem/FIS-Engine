@@ -2,7 +2,6 @@ package com.bracit.fisprocess.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,7 +47,7 @@ public class FinancialEventRequestDto {
     @NotBlank(message = "createdBy is required")
     private String createdBy;
 
-    @NotEmpty(message = "At least one journal line is required")
+    @Nullable
     @Valid
     private List<JournalLineRequestDto> lines;
 

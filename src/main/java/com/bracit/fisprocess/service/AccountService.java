@@ -24,7 +24,11 @@ public interface AccountService {
      * @param request  the account creation details
      * @return the created account response
      */
-    AccountResponseDto createAccount(UUID tenantId, CreateAccountRequestDto request);
+    default AccountResponseDto createAccount(UUID tenantId, CreateAccountRequestDto request) {
+        return createAccount(tenantId, request, "system");
+    }
+
+    AccountResponseDto createAccount(UUID tenantId, CreateAccountRequestDto request, String performedBy);
 
     /**
      * Retrieves an account by its unique code within a tenant.
@@ -58,5 +62,9 @@ public interface AccountService {
      * @param request     the update details (nullable fields for partial update)
      * @return the updated account response
      */
-    AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request);
+    default AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request) {
+        return updateAccount(tenantId, accountCode, request, "system");
+    }
+
+    AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request, String performedBy);
 }

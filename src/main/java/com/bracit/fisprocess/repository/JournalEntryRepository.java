@@ -4,6 +4,7 @@ import com.bracit.fisprocess.domain.entity.JournalEntry;
 import com.bracit.fisprocess.domain.enums.JournalStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,6 +20,9 @@ import java.util.UUID;
 public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID> {
 
     Optional<JournalEntry> findByTenantIdAndId(UUID tenantId, UUID journalEntryId);
+
+    @EntityGraph(attributePaths = {"lines", "lines.account"})
+    Optional<JournalEntry> findWithLinesByTenantIdAndId(UUID tenantId, UUID journalEntryId);
 
     Optional<JournalEntry> findByTenantIdAndEventId(UUID tenantId, String eventId);
 

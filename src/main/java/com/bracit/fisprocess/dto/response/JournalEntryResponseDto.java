@@ -1,8 +1,10 @@
 package com.bracit.fisprocess.dto.response;
 
 import com.bracit.fisprocess.domain.enums.JournalStatus;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -15,6 +17,8 @@ import java.util.UUID;
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class JournalEntryResponseDto {
 
     private UUID journalEntryId;

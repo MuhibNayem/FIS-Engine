@@ -12,13 +12,17 @@ import com.bracit.fisprocess.exception.JournalEntryNotFoundException;
 import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
+import com.bracit.fisprocess.service.ActorRoleResolver;
 import com.bracit.fisprocess.service.JournalEntryService;
 import com.bracit.fisprocess.service.JournalEntryValidationService;
 import com.bracit.fisprocess.service.LedgerPersistenceService;
+import com.bracit.fisprocess.service.MultiCurrencyService;
 import com.bracit.fisprocess.service.OutboxService;
+import com.bracit.fisprocess.service.PeriodValidationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
+import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -40,28 +44,45 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private final BusinessEntityRepository businessEntityRepository;
     private final JournalEntryValidationService validationService;
     private final LedgerPersistenceService ledgerPersistenceService;
+    private final PeriodValidationService periodValidationService;
+    private final MultiCurrencyService multiCurrencyService;
+    private final ActorRoleResolver actorRoleResolver;
     private final OutboxService outboxService;
+    private final ModelMapper modelMapper;
 
     @Override
     @Transactional
-    public JournalEntryResponseDto createJournalEntry(UUID tenantId, CreateJournalEntryRequestDto request) {
+    public JournalEntryResponseDto createJournalEntry(
+            UUID tenantId,
+            CreateJournalEntryRequestDto request,
+            @Nullable String actorRoleHeader,
+            @Nullable String traceparent) {
         // 1. Resolve tenant
         BusinessEntity tenant = businessEntityRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(tenantId.toString()));
 
-        // 2. Build draft from request
+        // 2. Validate accounting period by posting date.
+        periodValidationService.validatePostingAllowed(
+                tenantId,
+                request.getPostedDate(),
+                actorRoleResolver.resolve(actorRoleHeader));
+
+        // 3. Build draft from request
         DraftJournalEntry draft = buildDraft(tenantId, tenant, request);
 
-        // 3. Validate double-entry rules
+        // 4. Apply FX conversion / base amount derivation.
+        draft = multiCurrencyService.apply(draft);
+
+        // 5. Validate double-entry rules
         validationService.validate(draft);
 
-        // 4. Persist atomically (hash chain + balance updates)
+        // 6. Persist atomically (hash chain + balance updates)
         JournalEntry persisted = ledgerPersistenceService.persist(draft);
 
-        // 5. Emit immutable domain event via transactional outbox.
-        outboxService.recordJournalPosted(tenantId, request.getEventId(), persisted);
+        // 7. Emit immutable domain event via transactional outbox.
+        outboxService.recordJournalPosted(tenantId, request.getEventId(), persisted, traceparent);
 
-        // 6. Map to response
+        // 8. Map to response
         return toResponseDto(persisted);
     }
 
@@ -90,45 +111,23 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
     private DraftJournalEntry buildDraft(UUID tenantId, BusinessEntity tenant,
             CreateJournalEntryRequestDto request) {
-        return DraftJournalEntry.builder()
-                .tenantId(tenantId)
-                .eventId(request.getEventId())
-                .postedDate(request.getPostedDate())
-                .description(request.getDescription())
-                .referenceId(request.getReferenceId())
-                .transactionCurrency(request.getTransactionCurrency())
-                .baseCurrency(tenant.getBaseCurrency())
-                .createdBy(request.getCreatedBy())
-                .lines(request.getLines().stream()
-                        .map(this::toDraftLine)
-                        .toList())
-                .build();
+        DraftJournalEntry draft = modelMapper.map(request, DraftJournalEntry.class);
+        draft.setTenantId(tenantId);
+        draft.setBaseCurrency(tenant.getBaseCurrency());
+        draft.setLines(request.getLines().stream().map(this::toDraftLine).toList());
+        return draft;
     }
 
     private DraftJournalLine toDraftLine(JournalLineRequestDto dto) {
-        return DraftJournalLine.builder()
-                .accountCode(dto.getAccountCode())
-                .amountCents(dto.getAmountCents())
-                .baseAmountCents(dto.getAmountCents()) // same-currency for Phase 2; multi-currency in Phase 4
-                .isCredit(dto.isCredit())
-                .dimensions(dto.getDimensions())
-                .build();
+        DraftJournalLine line = modelMapper.map(dto, DraftJournalLine.class);
+        line.setBaseAmountCents(dto.getAmountCents());
+        return line;
     }
 
     private JournalEntryResponseDto toResponseDto(JournalEntry entry) {
-        return JournalEntryResponseDto.builder()
-                .journalEntryId(entry.getId())
-                .postedDate(entry.getPostedDate())
-                .status(entry.getStatus())
-                .description(entry.getDescription())
-                .referenceId(entry.getReferenceId())
-                .transactionCurrency(entry.getTransactionCurrency())
-                .baseCurrency(entry.getBaseCurrency())
-                .exchangeRate(entry.getExchangeRate())
-                .lineCount(entry.getLines().size())
-                .reversalOfId(entry.getReversalOfId())
-                .createdBy(entry.getCreatedBy())
-                .createdAt(entry.getCreatedAt())
-                .build();
+        JournalEntryResponseDto response = modelMapper.map(entry, JournalEntryResponseDto.class);
+        response.setJournalEntryId(entry.getId());
+        response.setLineCount(entry.getLines().size());
+        return response;
     }
 }

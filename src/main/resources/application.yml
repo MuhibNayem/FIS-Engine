@@ -41,6 +41,10 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     listener:
       simple:
         acknowledge-mode: manual
@@ -52,6 +56,14 @@ spring:
 fis:
   outbox:
     relay-delay-ms: ${FIS_OUTBOX_RELAY_DELAY_MS:1000}
+  revaluation:
+    reserve-account-code: ${FIS_REVAL_RESERVE_ACCOUNT:FX_REVAL_RESERVE}
+    gain-account-code: ${FIS_REVAL_GAIN_ACCOUNT:FX_UNREALIZED_GAIN}
+    loss-account-code: ${FIS_REVAL_LOSS_ACCOUNT:FX_UNREALIZED_LOSS}
+  security:
+    enabled: ${FIS_SECURITY_ENABLED:false}
+    jwt:
+      hmac-secret: ${FIS_JWT_HMAC_SECRET:01234567890123456789012345678901}
 
 # --- Actuator ---
 management:
@@ -62,6 +74,11 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+
+server:
+  forward-headers-strategy: framework
 
 ---
 # ========================
@@ -112,6 +129,10 @@ spring:
     activate:
       on-profile: prod
 
+fis:
+  security:
+    enabled: ${FIS_SECURITY_ENABLED:true}
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -127,3 +148,14 @@ spring:
       hibernate:
         show_sql: false
         format_sql: false
+  rabbitmq:
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:true}
+  data:
+    redis:
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
+server:
+  ssl:
+    enabled: ${SERVER_SSL_ENABLED:true}
+    protocol: TLSv1.3

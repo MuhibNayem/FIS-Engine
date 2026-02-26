@@ -48,8 +48,9 @@ public class AccountController {
     @PostMapping
     public ResponseEntity<AccountResponseDto> createAccount(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String performedBy,
             @Valid @RequestBody CreateAccountRequestDto request) {
-        AccountResponseDto response = accountService.createAccount(tenantId, request);
+        AccountResponseDto response = accountService.createAccount(tenantId, request, performedBy);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -99,9 +100,10 @@ public class AccountController {
     @PatchMapping("/{accountCode}")
     public ResponseEntity<AccountResponseDto> updateAccount(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader(value = "X-Actor-Id", defaultValue = "system") String performedBy,
             @PathVariable String accountCode,
             @Valid @RequestBody UpdateAccountRequestDto request) {
-        AccountResponseDto response = accountService.updateAccount(tenantId, accountCode, request);
+        AccountResponseDto response = accountService.updateAccount(tenantId, accountCode, request, performedBy);
         return ResponseEntity.ok(response);
     }
 }

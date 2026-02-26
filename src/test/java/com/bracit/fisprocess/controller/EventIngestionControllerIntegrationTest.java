@@ -2,20 +2,27 @@ package com.bracit.fisprocess.controller;
 
 import com.bracit.fisprocess.AbstractIntegrationTest;
 import com.bracit.fisprocess.domain.entity.Account;
+import com.bracit.fisprocess.domain.entity.AccountingPeriod;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.enums.AccountType;
 import com.bracit.fisprocess.domain.enums.IdempotencyStatus;
+import com.bracit.fisprocess.domain.enums.PeriodStatus;
 import com.bracit.fisprocess.dto.request.FinancialEventRequestDto;
+import com.bracit.fisprocess.dto.request.IngestionEnvelopeDto;
 import com.bracit.fisprocess.dto.request.JournalLineRequestDto;
 import com.bracit.fisprocess.repository.AccountRepository;
+import com.bracit.fisprocess.repository.AccountingPeriodRepository;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.IdempotencyLogRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import com.bracit.fisprocess.repository.OutboxEventRepository;
+import com.bracit.fisprocess.config.RabbitMqTopology;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -48,6 +55,8 @@ class EventIngestionControllerIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private AccountRepository accountRepository;
+    @Autowired
+    private AccountingPeriodRepository accountingPeriodRepository;
 
     @Autowired
     private JournalEntryRepository journalEntryRepository;
@@ -61,6 +70,12 @@ class EventIngestionControllerIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private JsonMapper jsonMapper;
 
+    @Autowired
+    private RabbitAdmin rabbitAdmin;
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+
     private UUID tenantId;
 
     @BeforeEach
@@ -71,6 +86,14 @@ class EventIngestionControllerIntegrationTest extends AbstractIntegrationTest {
                 .isActive(true)
                 .build();
         tenantId = businessEntityRepository.save(tenant).getTenantId();
+
+        accountingPeriodRepository.save(AccountingPeriod.builder()
+                .tenantId(tenantId)
+                .name("2026-02")
+                .startDate(LocalDate.of(2026, 2, 1))
+                .endDate(LocalDate.of(2026, 2, 28))
+                .status(PeriodStatus.OPEN)
+                .build());
 
         accountRepository.save(Account.builder()
                 .tenantId(tenantId)
@@ -87,6 +110,9 @@ class EventIngestionControllerIntegrationTest extends AbstractIntegrationTest {
                 .accountType(AccountType.REVENUE)
                 .currencyCode("USD")
                 .build());
+
+        rabbitAdmin.purgeQueue(RabbitMqTopology.INGESTION_QUEUE, true);
+        rabbitAdmin.purgeQueue(RabbitMqTopology.INGESTION_DLQ_QUEUE, true);
     }
 
     @Test
@@ -133,7 +159,8 @@ class EventIngestionControllerIntegrationTest extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.ik", is(eventId)));
+                .andExpect(jsonPath("$.ik", is(eventId)))
+                .andExpect(jsonPath("$.message", is("Event queued for ledger processing.")));
 
         assertEquals(1L, journalEntryRepository.countByTenantIdAndEventId(tenantId, eventId));
     }
@@ -158,6 +185,70 @@ class EventIngestionControllerIntegrationTest extends AbstractIntegrationTest {
                 .content(jsonMapper.writeValueAsString(second)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.type", is("/problems/duplicate-idempotency-key")));
+    }
+
+    @Test
+    void shouldRouteStructurallyInvalidMessageToDlqWithoutRequeue() throws Exception {
+        IngestionEnvelopeDto malformed = IngestionEnvelopeDto.builder()
+                .tenantId(tenantId)
+                .sourceSystem("ERP")
+                .payloadHash("hash")
+                .event(FinancialEventRequestDto.builder()
+                        .eventId("")
+                        .eventType("")
+                        .transactionCurrency("USD")
+                        .createdBy("event-test")
+                        .lines(List.of())
+                        .build())
+                .build();
+
+        rabbitTemplate.convertAndSend(
+                RabbitMqTopology.EVENTS_EXCHANGE,
+                "erp.journal_posted.v1",
+                malformed);
+
+        waitForCondition(() -> queueDepth(RabbitMqTopology.INGESTION_DLQ_QUEUE) > 0, 10_000L);
+        assertEquals(0L, queueDepth(RabbitMqTopology.INGESTION_QUEUE));
+    }
+
+    @Test
+    void shouldRouteBusinessInvalidEventToDlqAndMarkFailed() throws Exception {
+        String eventId = "EVT-DLQ-" + UUID.randomUUID().toString().substring(0, 8);
+        FinancialEventRequestDto request = FinancialEventRequestDto.builder()
+                .eventId(eventId)
+                .eventType("JOURNAL_POSTED")
+                .occurredAt(OffsetDateTime.now())
+                .postedDate(LocalDate.of(2026, 2, 25))
+                .description("Invalid account event")
+                .referenceId("REF-" + eventId)
+                .transactionCurrency("USD")
+                .createdBy("event-test")
+                .lines(List.of(
+                        JournalLineRequestDto.builder()
+                                .accountCode("MISSING-ACCOUNT")
+                                .amountCents(5_000L)
+                                .isCredit(false)
+                                .build(),
+                        JournalLineRequestDto.builder()
+                                .accountCode("REVENUE")
+                                .amountCents(5_000L)
+                                .isCredit(true)
+                                .build()))
+                .build();
+
+        mockMvc.perform(post("/v1/events")
+                .header("X-Tenant-Id", tenantId)
+                .header("X-Source-System", "ERP")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isAccepted());
+
+        waitForCondition(() -> queueDepth(RabbitMqTopology.INGESTION_DLQ_QUEUE) > 0, 10_000L);
+        waitForCondition(() -> idempotencyLogRepository.findByTenantIdAndEventId(tenantId, eventId)
+                .map(log -> log.getStatus() == IdempotencyStatus.FAILED)
+                .orElse(false), 10_000L);
+
+        assertEquals(0L, journalEntryRepository.countByTenantIdAndEventId(tenantId, eventId));
     }
 
     private FinancialEventRequestDto financialEvent(String eventId, long amountCents) {
@@ -193,5 +284,10 @@ class EventIngestionControllerIntegrationTest extends AbstractIntegrationTest {
             Thread.sleep(100);
         }
         throw new AssertionError("Condition not met within timeout");
+    }
+
+    private long queueDepth(String queueName) {
+        Integer count = rabbitTemplate.execute(channel -> (int) channel.messageCount(queueName));
+        return count == null ? 0L : count.longValue();
     }
 }

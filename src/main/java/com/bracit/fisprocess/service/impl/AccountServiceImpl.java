@@ -2,6 +2,8 @@ package com.bracit.fisprocess.service.impl;
 
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.enums.AccountType;
+import com.bracit.fisprocess.domain.enums.AuditAction;
+import com.bracit.fisprocess.domain.enums.AuditEntityType;
 import com.bracit.fisprocess.dto.request.CreateAccountRequestDto;
 import com.bracit.fisprocess.dto.request.UpdateAccountRequestDto;
 import com.bracit.fisprocess.dto.response.AccountResponseDto;
@@ -11,9 +13,11 @@ import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.AccountRepository;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.service.AccountService;
+import com.bracit.fisprocess.service.AuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
+import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -22,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.text.NumberFormat;
 import java.util.Currency;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -39,18 +44,35 @@ public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
     private final BusinessEntityRepository businessEntityRepository;
+    private final AuditService auditService;
+    private final ModelMapper modelMapper;
 
     @Override
     @Transactional
-    public AccountResponseDto createAccount(UUID tenantId, CreateAccountRequestDto request) {
+    public AccountResponseDto createAccount(UUID tenantId, CreateAccountRequestDto request, String performedBy) {
         validateTenantExists(tenantId);
         validateAccountCodeUniqueness(tenantId, request.getCode());
 
         Account account = buildAccountFromRequest(tenantId, request);
         Account saved = accountRepository.save(account);
+        AccountResponseDto response = toResponseDto(saved);
+
+        auditService.logChange(
+                tenantId,
+                AuditEntityType.ACCOUNT,
+                saved.getAccountId(),
+                AuditAction.CREATED,
+                null,
+                Map.of(
+                        "code", saved.getCode(),
+                        "name", saved.getName(),
+                        "accountType", saved.getAccountType().name(),
+                        "currencyCode", saved.getCurrencyCode(),
+                        "isActive", saved.isActive()),
+                performedBy);
 
         log.info("Created account '{}' for tenant '{}'", saved.getCode(), tenantId);
-        return toResponseDto(saved);
+        return response;
     }
 
     @Override
@@ -76,15 +98,33 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request) {
+    public AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request, String performedBy) {
         validateTenantExists(tenantId);
 
         Account account = findAccountOrThrow(tenantId, accountCode);
+        Map<String, Object> oldValue = Map.of(
+                "code", account.getCode(),
+                "name", account.getName(),
+                "isActive", account.isActive());
         applyUpdates(account, request);
         Account updated = accountRepository.save(account);
+        AccountResponseDto response = toResponseDto(updated);
+
+        AuditAction action = Boolean.FALSE.equals(request.getIsActive()) ? AuditAction.DEACTIVATED : AuditAction.UPDATED;
+        auditService.logChange(
+                tenantId,
+                AuditEntityType.ACCOUNT,
+                updated.getAccountId(),
+                action,
+                oldValue,
+                Map.of(
+                        "code", updated.getCode(),
+                        "name", updated.getName(),
+                        "isActive", updated.isActive()),
+                performedBy);
 
         log.info("Updated account '{}' for tenant '{}'", accountCode, tenantId);
-        return toResponseDto(updated);
+        return response;
     }
 
     // --- Private Helper Methods ---
@@ -106,19 +146,15 @@ public class AccountServiceImpl implements AccountService {
     }
 
     private Account buildAccountFromRequest(UUID tenantId, CreateAccountRequestDto request) {
-        Account.AccountBuilder builder = Account.builder()
-                .tenantId(tenantId)
-                .code(request.getCode())
-                .name(request.getName())
-                .accountType(request.getAccountType())
-                .currencyCode(request.getCurrencyCode());
+        Account account = modelMapper.map(request, Account.class);
+        account.setTenantId(tenantId);
 
         if (request.getParentAccountCode() != null) {
             Account parent = findAccountOrThrow(tenantId, request.getParentAccountCode());
-            builder.parentAccount(parent);
+            account.setParentAccount(parent);
         }
 
-        return builder.build();
+        return account;
     }
 
     private void applyUpdates(Account account, UpdateAccountRequestDto request) {
@@ -131,24 +167,13 @@ public class AccountServiceImpl implements AccountService {
     }
 
     private AccountResponseDto toResponseDto(Account account) {
-        @Nullable
-        String parentCode = account.getParentAccount() != null
-                ? account.getParentAccount().getCode()
-                : null;
-
-        return AccountResponseDto.builder()
-                .accountId(account.getAccountId())
-                .code(account.getCode())
-                .name(account.getName())
-                .accountType(account.getAccountType())
-                .currencyCode(account.getCurrencyCode())
-                .currentBalanceCents(account.getCurrentBalance())
-                .formattedBalance(formatBalance(account.getCurrentBalance(), account.getCurrencyCode()))
-                .isActive(account.isActive())
-                .parentAccountCode(parentCode)
-                .createdAt(account.getCreatedAt())
-                .updatedAt(account.getUpdatedAt())
-                .build();
+        AccountResponseDto response = modelMapper.map(account, AccountResponseDto.class);
+        response.setAccountId(account.getAccountId());
+        response.setCurrentBalanceCents(account.getCurrentBalance());
+        response.setActive(account.isActive());
+        response.setParentAccountCode(account.getParentAccount() != null ? account.getParentAccount().getCode() : null);
+        response.setFormattedBalance(formatBalance(account.getCurrentBalance(), account.getCurrencyCode()));
+        return response;
     }
 
     private String formatBalance(Long balanceCents, String currencyCode) {

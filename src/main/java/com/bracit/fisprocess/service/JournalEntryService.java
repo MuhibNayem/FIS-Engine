@@ -15,7 +15,20 @@ import java.util.UUID;
  */
 public interface JournalEntryService {
 
-    JournalEntryResponseDto createJournalEntry(UUID tenantId, CreateJournalEntryRequestDto request);
+    default JournalEntryResponseDto createJournalEntry(UUID tenantId, CreateJournalEntryRequestDto request) {
+        return createJournalEntry(tenantId, request, null, null);
+    }
+
+    default JournalEntryResponseDto createJournalEntry(
+            UUID tenantId, CreateJournalEntryRequestDto request, @Nullable String actorRoleHeader) {
+        return createJournalEntry(tenantId, request, actorRoleHeader, null);
+    }
+
+    JournalEntryResponseDto createJournalEntry(
+            UUID tenantId,
+            CreateJournalEntryRequestDto request,
+            @Nullable String actorRoleHeader,
+            @Nullable String traceparent);
 
     JournalEntryResponseDto getJournalEntry(UUID tenantId, UUID journalEntryId);
 

@@ -11,6 +11,9 @@ import com.bracit.fisprocess.exception.DuplicateAccountCodeException;
 import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.AccountRepository;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
+import com.bracit.fisprocess.service.AuditService;
+import org.modelmapper.ModelMapper;
+import org.modelmapper.convention.MatchingStrategies;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -18,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -46,6 +50,11 @@ class AccountServiceImplTest {
 
     @Mock
     private BusinessEntityRepository businessEntityRepository;
+    @Mock
+    private AuditService auditService;
+
+    @Spy
+    private ModelMapper modelMapper = new ModelMapper();
 
     @InjectMocks
     private AccountServiceImpl accountService;
@@ -57,6 +66,10 @@ class AccountServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        modelMapper.getConfiguration()
+                .setMatchingStrategy(MatchingStrategies.STRICT)
+                .setSkipNullEnabled(true);
+
         activeTenant = BusinessEntity.builder()
                 .tenantId(TENANT_ID)
                 .name("Test Corp")

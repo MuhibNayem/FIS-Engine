@@ -1,8 +1,12 @@
 package com.bracit.fisprocess.controller;
 
 import com.bracit.fisprocess.domain.enums.JournalStatus;
+import com.bracit.fisprocess.dto.request.CorrectionRequestDto;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryRequestDto;
+import com.bracit.fisprocess.dto.request.ReversalRequestDto;
 import com.bracit.fisprocess.dto.response.JournalEntryResponseDto;
+import com.bracit.fisprocess.dto.response.ReversalResponseDto;
+import com.bracit.fisprocess.service.JournalReversalService;
 import com.bracit.fisprocess.service.JournalEntryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,12 +36,15 @@ import java.util.UUID;
 public class JournalEntryController {
 
     private final JournalEntryService journalEntryService;
+    private final JournalReversalService journalReversalService;
 
     @PostMapping
     public ResponseEntity<JournalEntryResponseDto> createJournalEntry(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader(value = "X-Actor-Role", required = false) @Nullable String actorRole,
+            @RequestHeader(value = "traceparent", required = false) @Nullable String traceparent,
             @Valid @RequestBody CreateJournalEntryRequestDto request) {
-        JournalEntryResponseDto response = journalEntryService.createJournalEntry(tenantId, request);
+        JournalEntryResponseDto response = journalEntryService.createJournalEntry(tenantId, request, actorRole, traceparent);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -63,5 +70,23 @@ public class JournalEntryController {
                 tenantId, postedDateFrom, postedDateTo, accountCode, status, referenceId,
                 PageRequest.of(page, size));
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/{id}/reverse")
+    public ResponseEntity<ReversalResponseDto> reverseJournalEntry(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id,
+            @Valid @RequestBody ReversalRequestDto request) {
+        ReversalResponseDto response = journalReversalService.reverse(tenantId, id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/{id}/correct")
+    public ResponseEntity<ReversalResponseDto> correctJournalEntry(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID id,
+            @Valid @RequestBody CorrectionRequestDto request) {
+        ReversalResponseDto response = journalReversalService.correct(tenantId, id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

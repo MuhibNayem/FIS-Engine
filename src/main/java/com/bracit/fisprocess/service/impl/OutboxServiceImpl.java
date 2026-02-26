@@ -7,6 +7,8 @@ import com.bracit.fisprocess.repository.OutboxEventRepository;
 import com.bracit.fisprocess.service.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
+import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -33,7 +35,8 @@ public class OutboxServiceImpl implements OutboxService {
 
     @Override
     @Transactional
-    public void recordJournalPosted(UUID tenantId, String sourceEventId, JournalEntry journalEntry) {
+    public void recordJournalPosted(
+            UUID tenantId, String sourceEventId, JournalEntry journalEntry, @Nullable String traceparent) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("journalEntryId", journalEntry.getId());
         payload.put("tenantId", tenantId);
@@ -49,6 +52,7 @@ public class OutboxServiceImpl implements OutboxService {
                 .aggregateType("JOURNAL_ENTRY")
                 .aggregateId(journalEntry.getId())
                 .payload(toJson(payload))
+                .traceparent(traceparent)
                 .published(false)
                 .build();
         outboxEventRepository.save(event);
@@ -61,7 +65,17 @@ public class OutboxServiceImpl implements OutboxService {
         List<OutboxEvent> unpublished = outboxEventRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc();
         for (OutboxEvent event : unpublished) {
             try {
-                rabbitTemplate.convertAndSend(RabbitMqTopology.DOMAIN_EXCHANGE, event.getEventType(), event.getPayload());
+                rabbitTemplate.convertAndSend(
+                        RabbitMqTopology.DOMAIN_EXCHANGE,
+                        event.getEventType(),
+                        event.getPayload(),
+                        message -> {
+                            message.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
+                            if (event.getTraceparent() != null && !event.getTraceparent().isBlank()) {
+                                message.getMessageProperties().setHeader("traceparent", event.getTraceparent());
+                            }
+                            return message;
+                        });
                 event.setPublished(true);
                 event.setPublishedAt(OffsetDateTime.now());
                 outboxEventRepository.save(event);

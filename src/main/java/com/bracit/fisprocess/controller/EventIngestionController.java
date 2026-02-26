@@ -5,6 +5,7 @@ import com.bracit.fisprocess.dto.response.EventIngestionResponseDto;
 import com.bracit.fisprocess.service.FinancialEventIngestionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,8 +30,9 @@ public class EventIngestionController {
     public ResponseEntity<EventIngestionResponseDto> ingest(
             @RequestHeader("X-Tenant-Id") UUID tenantId,
             @RequestHeader("X-Source-System") String sourceSystem,
+            @RequestHeader(value = "traceparent", required = false) @Nullable String traceparent,
             @Valid @RequestBody FinancialEventRequestDto request) {
-        EventIngestionResponseDto response = ingestionService.ingest(tenantId, sourceSystem, request);
+        EventIngestionResponseDto response = ingestionService.ingest(tenantId, sourceSystem, request, traceparent);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 }
