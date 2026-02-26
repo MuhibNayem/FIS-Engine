@@ -11,7 +11,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
@@ -24,12 +26,15 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "fis_accounting_period", uniqueConstraints = @UniqueConstraint(columnNames = { "tenant_id", "name" }))
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class AccountingPeriod {
 
+    @EqualsAndHashCode.Include
     @Id
     @Column(name = "period_id", nullable = false, updatable = false)
     private UUID periodId;

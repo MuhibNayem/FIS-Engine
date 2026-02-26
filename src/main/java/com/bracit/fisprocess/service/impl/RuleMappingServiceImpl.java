@@ -14,12 +14,14 @@ import com.bracit.fisprocess.repository.MappingRuleRepository;
 import com.bracit.fisprocess.service.RuleMappingService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.SimpleEvaluationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,10 +33,12 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class RuleMappingServiceImpl implements RuleMappingService {
 
+    private static final int DEFAULT_EXPRESSION_CACHE_MAX_SIZE = 2048;
+
     private final MappingRuleRepository mappingRuleRepository;
     private final BusinessEntityRepository businessEntityRepository;
-
-    private final ExpressionParser parser = new SpelExpressionParser();
+    private ExpressionParser parser = new SpelExpressionParser();
+    private Map<String, Expression> expressionCache = createExpressionCache(DEFAULT_EXPRESSION_CACHE_MAX_SIZE);
 
     @Override
     public DraftJournalEntry mapToDraft(UUID tenantId, FinancialEventRequestDto event, @Nullable String fallbackCreatedBy) {
@@ -143,7 +147,7 @@ public class RuleMappingServiceImpl implements RuleMappingService {
 
     private Object evaluateExpression(String normalizedExpression, Map<String, Object> contextMap) {
         try {
-            return parser.parseExpression(normalizedExpression)
+            return getOrCompileExpression(normalizedExpression)
                     .getValue(SimpleEvaluationContext.forReadOnlyDataBinding().build(), contextMap);
         } catch (RuntimeException ex) {
             if (normalizedExpression.startsWith("payload.")) {
@@ -155,5 +159,36 @@ public class RuleMappingServiceImpl implements RuleMappingService {
             }
             throw ex;
         }
+    }
+
+    private Expression getOrCompileExpression(String normalizedExpression) {
+        Expression cached = expressionCache.get(normalizedExpression);
+        if (cached != null) {
+            return cached;
+        }
+
+        synchronized (expressionCache) {
+            Expression rechecked = expressionCache.get(normalizedExpression);
+            if (rechecked != null) {
+                return rechecked;
+            }
+            Expression compiled = parser.parseExpression(normalizedExpression);
+            expressionCache.put(normalizedExpression, compiled);
+            return compiled;
+        }
+    }
+
+    void configureExpressionCacheForTesting(ExpressionParser parser, int maxSize) {
+        this.parser = parser;
+        this.expressionCache = createExpressionCache(Math.max(1, maxSize));
+    }
+
+    private Map<String, Expression> createExpressionCache(int maxSize) {
+        return Collections.synchronizedMap(new LinkedHashMap<>(128, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Expression> eldest) {
+                return size() > maxSize;
+            }
+        });
     }
 }

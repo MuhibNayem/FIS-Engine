@@ -11,6 +11,7 @@ import com.bracit.fisprocess.dto.request.JournalLineRequestDto;
 import com.bracit.fisprocess.repository.AccountRepository;
 import com.bracit.fisprocess.repository.AccountingPeriodRepository;
 import com.bracit.fisprocess.repository.BusinessEntityRepository;
+import com.bracit.fisprocess.repository.JournalEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,8 @@ class ConcurrencyIntegrationTest extends AbstractIntegrationTest {
         private AccountRepository accountRepository;
         @Autowired
         private AccountingPeriodRepository accountingPeriodRepository;
+        @Autowired
+        private JournalEntryRepository journalEntryRepository;
 
         @Autowired
         private JsonMapper jsonMapper;
@@ -179,6 +182,8 @@ class ConcurrencyIntegrationTest extends AbstractIntegrationTest {
                 assertThat(failCount.get())
                                 .as("No entries should fail")
                                 .isZero();
+
+                assertHashChainContinuity(successCount.get());
         }
 
         @Test
@@ -242,6 +247,8 @@ class ConcurrencyIntegrationTest extends AbstractIntegrationTest {
                 assertThat(revenueAccount.getCurrentBalance())
                                 .as("Revenue balance should match number of successful postings")
                                 .isEqualTo(expectedBalance);
+
+                assertHashChainContinuity(successCount.get());
         }
 
         private CreateJournalEntryRequestDto buildHotAccountRequest(String eventId, long amountPerEntry,
@@ -269,5 +276,21 @@ class ConcurrencyIntegrationTest extends AbstractIntegrationTest {
                                 .createdBy("concurrency-test")
                                 .lines(lines)
                                 .build();
+        }
+
+        private void assertHashChainContinuity(int expectedEntryCount) {
+                var entries = journalEntryRepository.findByTenantIdOrderByCreatedAtAsc(tenantId);
+
+                assertThat(entries)
+                                .as("Expected one journal entry per successful post")
+                                .hasSize(expectedEntryCount);
+
+                String previousHash = "0";
+                for (var entry : entries) {
+                        assertThat(entry.getPreviousHash())
+                                        .as("previousHash should link to prior hash for entry %s", entry.getId())
+                                        .isEqualTo(previousHash);
+                        previousHash = entry.getHash();
+                }
         }
 }

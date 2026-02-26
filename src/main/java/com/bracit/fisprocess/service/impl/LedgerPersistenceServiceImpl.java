@@ -8,11 +8,14 @@ import com.bracit.fisprocess.domain.enums.JournalStatus;
 import com.bracit.fisprocess.domain.model.DraftJournalEntry;
 import com.bracit.fisprocess.domain.model.DraftJournalLine;
 import com.bracit.fisprocess.exception.AccountNotFoundException;
+import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.AccountRepository;
+import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import com.bracit.fisprocess.service.HashChainService;
 import com.bracit.fisprocess.service.LedgerLockingService;
 import com.bracit.fisprocess.service.LedgerPersistenceService;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 
 /**
@@ -36,12 +40,23 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
 
     private final JournalEntryRepository journalEntryRepository;
     private final AccountRepository accountRepository;
+    private final BusinessEntityRepository businessEntityRepository;
     private final HashChainService hashChainService;
     private final LedgerLockingService ledgerLockingService;
+    private final MeterRegistry meterRegistry;
 
     @Override
     @Transactional
     public JournalEntry persist(DraftJournalEntry draft) {
+        long lockWaitStartNanos = System.nanoTime();
+        // Serialize hash-chain sequencing at tenant granularity.
+        businessEntityRepository.findByTenantIdForUpdate(draft.getTenantId())
+                .orElseThrow(() -> new TenantNotFoundException(draft.getTenantId().toString()));
+        long lockWaitNanos = System.nanoTime() - lockWaitStartNanos;
+        meterRegistry.timer("fis.hash.chain.lock.wait").record(lockWaitNanos, TimeUnit.NANOSECONDS);
+        log.debug("Acquired tenant hash lock for tenant '{}' in {} ms",
+                draft.getTenantId(), lockWaitNanos / 1_000_000.0);
+
         // 1. Get the previous hash for chain continuity
         String previousHash = hashChainService.getLatestHash(draft.getTenantId());
 

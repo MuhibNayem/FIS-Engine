@@ -11,7 +11,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -27,16 +29,20 @@ import java.util.UUID;
 @Entity
 @Table(name = "fis_idempotency_log")
 @IdClass(IdempotencyLog.IdempotencyLogId.class)
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class IdempotencyLog {
 
+    @EqualsAndHashCode.Include
     @Id
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
+    @EqualsAndHashCode.Include
     @Id
     @Column(name = "event_id", nullable = false)
     private String eventId;
@@ -63,7 +69,9 @@ public class IdempotencyLog {
     /**
      * Composite primary key for {@link IdempotencyLog}.
      */
-    @Data
+    @Getter
+    @Setter
+    @EqualsAndHashCode
     @NoArgsConstructor
     @AllArgsConstructor
     public static class IdempotencyLogId implements Serializable {

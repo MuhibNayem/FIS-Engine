@@ -15,7 +15,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Persistable;
@@ -36,12 +38,15 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "fis_journal_entry")
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class JournalEntry implements Persistable<UUID> {
 
+    @EqualsAndHashCode.Include
     @Id
     @Column(name = "journal_entry_id", updatable = false, nullable = false)
     private UUID id;

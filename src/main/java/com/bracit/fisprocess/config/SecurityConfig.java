@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -16,14 +15,18 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 
 @Configuration
 @EnableWebSecurity
@@ -66,9 +69,23 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(@Value("${fis.security.jwt.hmac-secret}") String secret) {
-        SecretKeySpec keySpec = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(keySpec).build();
+    JwtDecoder jwtDecoder(
+            @Value("${fis.security.enabled:true}") boolean securityEnabled,
+            @Value("${fis.security.jwt.public-key-pem:}") String publicKeyPem) {
+        if (!securityEnabled) {
+            return token -> {
+                throw new JwtException("JWT decoding is disabled because security is disabled.");
+            };
+        }
+        if (publicKeyPem == null || publicKeyPem.isBlank()) {
+            throw new IllegalStateException("fis.security.jwt.public-key-pem must be configured.");
+        }
+        PublicKey publicKey = parsePublicKey(publicKeyPem);
+        if (publicKey instanceof RSAPublicKey rsaPublicKey) {
+            return NimbusJwtDecoder.withPublicKey(rsaPublicKey).build();
+        }
+        throw new IllegalStateException("Unsupported JWT public key type: " + publicKey.getAlgorithm()
+                + ". Configure an RSA public key.");
     }
 
     private Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter() {
@@ -79,5 +96,19 @@ public class SecurityConfig {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
         return converter;
+    }
+
+    private PublicKey parsePublicKey(String pem) {
+        String normalized = pem
+                .replace("-----BEGIN PUBLIC KEY-----", "")
+                .replace("-----END PUBLIC KEY-----", "")
+                .replaceAll("\\s", "");
+        byte[] encoded = Base64.getDecoder().decode(normalized);
+        try {
+            return KeyFactory.getInstance("RSA")
+                    .generatePublic(new X509EncodedKeySpec(encoded));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Invalid RSA public key configuration", ex);
+        }
     }
 }

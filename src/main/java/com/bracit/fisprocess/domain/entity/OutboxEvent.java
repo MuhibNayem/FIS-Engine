@@ -7,7 +7,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -21,12 +23,15 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "fis_outbox")
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class OutboxEvent {
 
+    @EqualsAndHashCode.Include
     @Id
     @Column(name = "outbox_id", nullable = false, updatable = false)
     private UUID outboxId;

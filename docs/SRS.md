@@ -354,14 +354,17 @@ The complete DDL is defined in REF-04. The following tables are provisioned via 
 | :---- | :---- | :---- |
 | V1 | `fis_business_entity` | Multi-tenant organizational isolation |
 | V2 | `fis_account` | Chart of Accounts — hierarchical account tree with atomic balances |
-| V3 | `fis_accounting_period` | Fiscal period lifecycle (OPEN, SOFT\_CLOSED, HARD\_CLOSED) |
-| V4 | `fis_exchange_rate` | Daily FX rate snapshots per currency pair |
 | V5 | `fis_idempotency_log` | Durable exactly-once processing records |
 | V6 | `fis_journal_entry` | Immutable ledger header with hash chain, multi-currency fields, reversal links |
 | V7 | `fis_journal_line` | Individual Debit/Credit lines with JSONB dimensions |
-| V8 | `fis_mapping_rule` \+ `fis_mapping_rule_line` | Configurable event-to-journal translation rules |
-| V9 | `fis_audit_log` | Immutable administrative action log |
 | V10 | `fis_outbox` | Transactional outbox for durable domain-event publication |
+| V11 | append-only trigger functions + triggers | Enforces no `UPDATE` / `DELETE` on journal tables |
+| V12 | `fis_accounting_period` | Fiscal period lifecycle (OPEN, SOFT\_CLOSED, HARD\_CLOSED) |
+| V13 | `fis_exchange_rate` | Daily FX rate snapshots per currency pair |
+| V14 | `fis_mapping_rule` \+ `fis_mapping_rule_line` | Configurable event-to-journal translation rules |
+| V15 | `fis_audit_log` \+ `fis_revaluation_run` | Immutable admin audit trail and revaluation idempotency tracking |
+
+Historical note: migration numbers `V3`, `V4`, `V8`, and `V9` are intentionally unused in the current chain.
 
 ---
 

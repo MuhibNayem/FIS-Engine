@@ -132,6 +132,13 @@ Recommended configuration domains:
   - OpenAPI spec: `/openapi.yaml`
   - Swagger UI: `/swagger-ui.html`
 
+## JWT Configuration
+
+- `fis.security.jwt.public-key-pem`
+  - Required for JWT verification.
+  - Uses RSA public key verification.
+  - Production should use RS256 tokens issued by upstream IdP.
+
 ## Immutability Model (Industry Standard)
 
 - **Strict append-only (immutable):**

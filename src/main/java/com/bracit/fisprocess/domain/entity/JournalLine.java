@@ -12,9 +12,10 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
@@ -31,12 +32,15 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "fis_journal_line")
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class JournalLine {
 
+    @EqualsAndHashCode.Include
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "line_id", updatable = false, nullable = false)
@@ -44,7 +48,6 @@ public class JournalLine {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "journal_entry_id", nullable = false)
-    @ToString.Exclude
     private JournalEntry journalEntry;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

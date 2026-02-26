@@ -8,7 +8,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -23,12 +25,15 @@ import java.util.UUID;
 @Table(name = "fis_exchange_rate", uniqueConstraints = @UniqueConstraint(columnNames = {
         "tenant_id", "source_currency", "target_currency", "effective_date"
 }))
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ExchangeRate {
 
+    @EqualsAndHashCode.Include
     @Id
     @Column(name = "rate_id", nullable = false, updatable = false)
     private UUID rateId;

@@ -51,7 +51,7 @@ CREATE INDEX idx_account_type ON fis_account(tenant_id, account_type);
 
 ---
 
-## 3. Accounting Periods (Planned: Phase 4)
+## 3. Accounting Periods (`V12__create_accounting_periods.sql`)
 
 ```sql
 CREATE TABLE fis_accounting_period (
@@ -74,7 +74,7 @@ CREATE INDEX idx_period_dates ON fis_accounting_period(tenant_id, start_date, en
 
 ---
 
-## 4. Exchange Rates (Planned: Phase 4)
+## 4. Exchange Rates (`V13__create_exchange_rates.sql`)
 
 Stores daily exchange rate snapshots for multi-currency support.
 

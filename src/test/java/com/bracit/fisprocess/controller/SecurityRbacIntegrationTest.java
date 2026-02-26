@@ -14,7 +14,7 @@ import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,9 +29,12 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPublicKey;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -40,12 +43,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "fis.security.enabled=true",
-        "fis.security.jwt.hmac-secret=01234567890123456789012345678901"
+        "fis.security.enabled=true"
 })
 @AutoConfigureMockMvc
 @DisplayName("Security RBAC Integration Tests")
 class SecurityRbacIntegrationTest extends AbstractIntegrationTest {
+
+    private static final KeyPair JWT_KEY_PAIR = generateKeyPair();
 
     @Autowired
     private MockMvc mockMvc;
@@ -63,7 +67,7 @@ class SecurityRbacIntegrationTest extends AbstractIntegrationTest {
     @DynamicPropertySource
     static void securityProperties(DynamicPropertyRegistry registry) {
         registry.add("fis.security.enabled", () -> "true");
-        registry.add("fis.security.jwt.hmac-secret", () -> "01234567890123456789012345678901");
+        registry.add("fis.security.jwt.public-key-pem", () -> toPem((RSAPublicKey) JWT_KEY_PAIR.getPublic()));
     }
 
     @BeforeEach
@@ -182,12 +186,27 @@ class SecurityRbacIntegrationTest extends AbstractIntegrationTest {
                 .claim("roles", roles)
                 .build();
 
-        SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
-        jwt.sign(new MACSigner("01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8)));
+        SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.RS256), claims);
+        jwt.sign(new RSASSASigner(JWT_KEY_PAIR.getPrivate()));
         return jwt.serialize();
     }
 
     private String bearer(String token) {
         return "Bearer " + token;
+    }
+
+    private static KeyPair generateKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to generate JWT RSA key pair for tests", ex);
+        }
+    }
+
+    private static String toPem(RSAPublicKey publicKey) {
+        String encoded = Base64.getEncoder().encodeToString(publicKey.getEncoded());
+        return "-----BEGIN PUBLIC KEY-----\n" + encoded + "\n-----END PUBLIC KEY-----";
     }
 }

@@ -43,7 +43,7 @@ Required:
 - `RABBITMQ_USERNAME`
 - `RABBITMQ_PASSWORD`
 - `FIS_SECURITY_ENABLED=true`
-- `FIS_JWT_HMAC_SECRET` (32+ byte secret)
+- `FIS_JWT_PUBLIC_KEY_PEM` (required; RSA public key in PEM format)
 
 Recommended production hardening:
 - `SERVER_SSL_ENABLED=true`
@@ -112,9 +112,10 @@ Track:
 - Mandatory tenant header: `X-Tenant-Id`
 
 Token/secret rotation:
-1. Rotate `FIS_JWT_HMAC_SECRET` in secrets manager.
-2. Roll pods with new secret.
-3. Validate auth against new tokens.
+1. Rotate signing key pair in IdP/KMS.
+2. Update `FIS_JWT_PUBLIC_KEY_PEM` in secrets manager/config.
+3. Roll pods with new public key.
+4. Validate auth against newly issued RS256 tokens.
 
 ## 12. Routine Operational Tasks
 
@@ -167,7 +168,7 @@ Token/secret rotation:
 3. Restore Redis and verify key writes.
 
 ### 13.5 Security Incident (token misuse/forgery suspicion)
-1. Rotate JWT secret immediately.
+1. Rotate JWT key pair immediately.
 2. Invalidate active sessions/tokens upstream.
 3. Review audit logs and access logs by traceId and subject.
 4. Open incident report and preserve forensic logs.

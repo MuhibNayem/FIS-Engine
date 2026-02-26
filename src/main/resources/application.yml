@@ -63,7 +63,7 @@ fis:
   security:
     enabled: ${FIS_SECURITY_ENABLED:false}
     jwt:
-      hmac-secret: ${FIS_JWT_HMAC_SECRET:01234567890123456789012345678901}
+      public-key-pem: ${FIS_JWT_PUBLIC_KEY_PEM:}
 
 # --- Actuator ---
 management:

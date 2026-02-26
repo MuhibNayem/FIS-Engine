@@ -65,8 +65,10 @@ This document breaks down the FIS Engine development into **six sequentially dep
   - 100 concurrent postings to same account
   - deadlock-resilience test with reversed multi-account line order
 
-### Next Steps (Phase 4)
-- Implement accounting-period controls and multi-currency conversion/revaluation pipeline
+Migration numbering note: `V3`, `V4`, `V8`, and `V9` are intentionally unused in the current Flyway chain.
+
+### Next Steps
+- Track and close post-implementation hardening/remediation in `docs/10-audit-remediation-plan.md`
 
 ---
 
@@ -365,9 +367,9 @@ Add exchange rate management, automatic currency conversion on Journal Lines, an
 
 ### Deliverables
 
-#### [x] 4.1 — Flyway Migrations V3–V4
-- `V3__create_accounting_periods.sql` — `fis_accounting_period` table
-- `V4__create_exchange_rates.sql` — `fis_exchange_rate` table
+#### [x] 4.1 — Flyway Migrations V12–V13
+- `V12__create_accounting_periods.sql` — `fis_accounting_period` table
+- `V13__create_exchange_rates.sql` — `fis_exchange_rate` table
 
 #### [x] 4.2 — Accounting Period Domain
 - `AccountingPeriod` entity + `PeriodStatus` enum
@@ -487,9 +489,9 @@ Complete the feature set with Journal Entry reversals, the configurable mapping 
   - Atomically: reverse original + post new corrected JE
   - Both the reversal and replacement link to original
 
-#### [x] 5.3 — Flyway Migrations V8–V9
-- `V8__create_mapping_rules.sql` — `fis_mapping_rule` + `fis_mapping_rule_line` tables
-- `V9__create_audit_log.sql` — `fis_audit_log` table
+#### [x] 5.3 — Flyway Migrations V14–V15
+- `V14__create_mapping_rules.sql` — `fis_mapping_rule` + `fis_mapping_rule_line` tables
+- `V15__create_audit_log_and_revaluation_runs.sql` — `fis_audit_log` + `fis_revaluation_run` tables
 
 #### [x] 5.4 — Mapping Rules Engine
 - `MappingRule` + `MappingRuleLine` entities

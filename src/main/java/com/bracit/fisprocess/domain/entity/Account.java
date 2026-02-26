@@ -17,7 +17,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
@@ -38,12 +40,15 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "fis_account", uniqueConstraints = @UniqueConstraint(columnNames = { "tenant_id", "code" }))
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Account {
 
+    @EqualsAndHashCode.Include
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "account_id", updatable = false, nullable = false)

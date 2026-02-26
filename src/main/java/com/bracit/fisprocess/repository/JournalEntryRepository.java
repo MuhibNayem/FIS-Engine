@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.jspecify.annotations.Nullable;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,6 +26,8 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
     Optional<JournalEntry> findWithLinesByTenantIdAndId(UUID tenantId, UUID journalEntryId);
 
     Optional<JournalEntry> findByTenantIdAndEventId(UUID tenantId, String eventId);
+
+    List<JournalEntry> findByTenantIdOrderByCreatedAtAsc(UUID tenantId);
 
     /**
      * Returns the most recently created journal entry for hash chain computation.
