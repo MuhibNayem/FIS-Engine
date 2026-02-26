@@ -80,7 +80,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [POSTED, REVERSAL, CORRECTION]
+            enum: [DRAFT, PENDING_APPROVAL, POSTED, REVERSAL, CORRECTION, REJECTED]
         - name: referenceId
           in: query
           schema:
@@ -177,6 +177,82 @@ paths:
                 $ref: '#/components/schemas/ReversalResponse'
         '409':
           $ref: '#/components/responses/InvalidReversal'
+
+  /journal-entries/{id}/submit:
+    post:
+      summary: Submit draft journal entry for approval
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitWorkflowRequest'
+      responses:
+        '200':
+          description: Workflow submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalWorkflowActionResponse'
+
+  /journal-entries/{id}/approve:
+    post:
+      summary: Approve pending workflow journal entry
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorRoleHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveWorkflowRequest'
+      responses:
+        '201':
+          description: Workflow approved and posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalWorkflowActionResponse'
+
+  /journal-entries/{id}/reject:
+    post:
+      summary: Reject pending workflow journal entry
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectWorkflowRequest'
+      responses:
+        '200':
+          description: Workflow rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalWorkflowActionResponse'
 
   /accounts:
     post:
@@ -488,6 +564,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/RevaluationResponse'
 
+  /settlements:
+    post:
+      summary: Record FX settlement and post realized gain/loss adjustment
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettlementRequest'
+      responses:
+        '201':
+          description: Settlement processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementResponse'
+
+  /admin/integrity-check:
+    get:
+      summary: Verify accounting equation integrity for a tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Integrity check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerIntegrityCheckResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -649,6 +757,13 @@ components:
         createdAt:
           type: string
           format: date-time
+        fiscalYear:
+          type: integer
+          nullable: true
+        sequenceNumber:
+          type: integer
+          format: int64
+          nullable: true
 
     JournalEntryPage:
       type: object
@@ -717,6 +832,45 @@ components:
         message:
           type: string
 
+    SubmitWorkflowRequest:
+      type: object
+      required: [submittedBy]
+      properties:
+        submittedBy:
+          type: string
+
+    ApproveWorkflowRequest:
+      type: object
+      required: [approvedBy]
+      properties:
+        approvedBy:
+          type: string
+
+    RejectWorkflowRequest:
+      type: object
+      required: [rejectedBy, reason]
+      properties:
+        rejectedBy:
+          type: string
+        reason:
+          type: string
+
+    JournalWorkflowActionResponse:
+      type: object
+      properties:
+        workflowId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED]
+        postedJournalEntryId:
+          type: string
+          format: uuid
+          nullable: true
+        message:
+          type: string
+
     CreateAccountRequest:
       type: object
       required: [code, name, accountType, currencyCode]
@@ -733,6 +887,8 @@ components:
         parentAccountCode:
           type: string
           nullable: true
+        contra:
+          type: boolean
 
     UpdateAccountRequest:
       type: object
@@ -764,6 +920,8 @@ components:
         formattedBalance:
           type: string
         isActive:
+          type: boolean
+        contra:
           type: boolean
         parentAccountCode:
           type: string
@@ -1037,3 +1195,70 @@ components:
           items:
             type: string
             format: uuid
+
+    SettlementRequest:
+      type: object
+      required:
+        [eventId, originalJournalEntryId, settlementDate, settlementRate, monetaryAccountCode, gainAccountCode, lossAccountCode, createdBy]
+      properties:
+        eventId:
+          type: string
+        originalJournalEntryId:
+          type: string
+          format: uuid
+        settlementDate:
+          type: string
+          format: date
+        settlementRate:
+          type: number
+        monetaryAccountCode:
+          type: string
+        gainAccountCode:
+          type: string
+        lossAccountCode:
+          type: string
+        createdBy:
+          type: string
+
+    SettlementResponse:
+      type: object
+      properties:
+        originalJournalEntryId:
+          type: string
+          format: uuid
+        realizedGainLossJournalEntryId:
+          type: string
+          format: uuid
+          nullable: true
+        realizedDeltaBaseCents:
+          type: integer
+          format: int64
+        message:
+          type: string
+
+    LedgerIntegrityCheckResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        assetTotal:
+          type: integer
+          format: int64
+        liabilityTotal:
+          type: integer
+          format: int64
+        equityTotal:
+          type: integer
+          format: int64
+        revenueTotal:
+          type: integer
+          format: int64
+        expenseTotal:
+          type: integer
+          format: int64
+        equationDelta:
+          type: integer
+          format: int64
+        balanced:
+          type: boolean

@@ -1,324 +1,169 @@
-# Low-Level Design: API Contracts (REST/JSON)
+# API Contracts (REST/JSON)
 
-All APIs are versioned via URI path. All error responses conform to RFC 7807 `ProblemDetail`.
+Authoritative API contract for the current FIS Process service implementation.
 
-**Base URL:** `https://api.internal.org/fis/v1`
+Base path: `/v1`  
+Media type: `application/json`  
+Error format: RFC 7807 `application/problem+json`
 
-**Common Request Headers (all endpoints):**
-- `Content-Type: application/json`
-- `Authorization: Bearer {jwt_token}`
-- `X-Tenant-Id: {tenant_uuid}` (REQUIRED)
+## Common Headers
 
----
+- `Authorization: Bearer <jwt>` (when security enabled)
+- `X-Tenant-Id: <uuid>` (required for all business endpoints)
+- `traceparent: <w3c-traceparent>` (optional for write/intake endpoints)
 
-## 1. Financial Event Ingestion
+## Implemented Endpoints
 
-### POST `/events`
-Ingest a generic financial event from an upstream domain.
+### Event Intake
 
-**Additional Headers:**
-- `X-Source-System: {string}` (REQUIRED)
+- `POST /events`
+  - Headers: `X-Tenant-Id`, `X-Source-System`, optional `traceparent`
+  - Purpose: Ingest financial event for asynchronous processing.
+  - Success: `202 Accepted`
 
-**Request Body:**
-```json
-{
-  "eventId": "evt_987654321",
-  "eventType": "ORDER_COMPLETED",
-  "occurredAt": "2026-02-25T10:00:00Z",
-  "transactionCurrency": "GBP",
-  "payload": {
-    "totalAmountCents": 15000,
-    "feeAmountCents": 500,
-    "orderId": "ord_555"
-  },
-  "dimensions": {
-    "region": "EU-WEST",
-    "channel": "WEB"
-  }
-}
-```
+### Journal Entries
 
-**202 Accepted:**
-```json
-{
-  "status": "ACCEPTED",
-  "ik": "evt_987654321",
-  "message": "Event queued for ledger processing."
-}
-```
+- `POST /journal-entries`
+  - Headers: `X-Tenant-Id`, optional `X-Actor-Role`, optional `traceparent`
+  - Purpose: Create manual JE (may post immediately or create workflow draft depending on threshold).
+  - Success: `201 Created`
 
-**409 Conflict** (duplicate `eventId` with different payload):
-```json
-{
-  "type": "/problems/duplicate-idempotency-key",
-  "title": "Duplicate Idempotency Key",
-  "status": 409,
-  "detail": "eventId 'evt_987654321' was already used with a different payload hash.",
-  "instance": "/v1/events"
-}
-```
+- `GET /journal-entries`
+  - Headers: `X-Tenant-Id`
+  - Query: `postedDateFrom`, `postedDateTo`, `accountCode`, `status`, `referenceId`, `page`, `size`
+  - Success: `200 OK`
 
----
+- `GET /journal-entries/{id}`
+  - Headers: `X-Tenant-Id`
+  - Success: `200 OK`
 
-## 2. Manual Journal Entries
+- `POST /journal-entries/{id}/reverse`
+  - Headers: `X-Tenant-Id`
+  - Purpose: Full reversal JE.
+  - Success: `201 Created`
 
-### POST `/journal-entries`
-Post a manual adjusting entry (Role: `FIS_ADMIN` or `FIS_ACCOUNTANT`).
+- `POST /journal-entries/{id}/correct`
+  - Headers: `X-Tenant-Id`
+  - Purpose: Reverse + replacement JE flow.
+  - Success: `201 Created`
 
-**Request Body:**
-```json
-{
-  "eventId": "manual_je_2026_02_25_0001",
-  "postedDate": "2026-02-25",
-  "description": "Manual correction for invoice 9921",
-  "referenceId": "INV-9921-CORRECTION",
-  "transactionCurrency": "USD",
-  "lines": [
-    {
-      "accountCode": "4000-REVENUE",
-      "amountCents": 5000,
-      "isCredit": false,
-      "dimensions": { "department": "sales" }
-    },
-    {
-      "accountCode": "1000-CASH",
-      "amountCents": 5000,
-      "isCredit": true,
-      "dimensions": { "department": "sales" }
-    }
-  ]
-}
-```
+- `POST /journal-entries/{id}/submit`
+  - Headers: `X-Tenant-Id`
+  - Body: `submittedBy`
+  - Purpose: Move JE workflow from `DRAFT` to `PENDING_APPROVAL`.
+  - Success: `200 OK`
 
-**201 Created:**
-```json
-{
-  "journalEntryId": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "POSTED",
-  "postedAt": "2026-02-25T10:05:00Z"
-}
-```
+- `POST /journal-entries/{id}/approve`
+  - Headers: `X-Tenant-Id`, optional `X-Actor-Role`
+  - Body: `approvedBy`
+  - Purpose: Approve pending JE workflow (maker-checker enforced) and post immutable JE.
+  - Success: `201 Created`
 
-**422 Unprocessable Entity:**
-```json
-{
-  "type": "/problems/unbalanced-entry",
-  "title": "Unbalanced Journal Entry",
-  "status": 422,
-  "detail": "Journal Entry is unbalanced. Debits: 5000, Credits: 4000.",
-  "instance": "/v1/journal-entries"
-}
-```
+- `POST /journal-entries/{id}/reject`
+  - Headers: `X-Tenant-Id`
+  - Body: `rejectedBy`, `reason`
+  - Purpose: Reject pending JE workflow.
+  - Success: `200 OK`
 
-### GET `/journal-entries?postedDateFrom=2026-01-01&postedDateTo=2026-02-28&accountCode=1000-CASH&status=POSTED&page=0&size=50`
-Query journal entries with filters.
+### Accounts
 
-Supported query params:
-- `postedDateFrom` (optional)
-- `postedDateTo` (optional)
-- `accountCode` (optional)
-- `status` (optional)
-- `referenceId` (optional)
-- `page` (default `0`)
-- `size` (default `20`)
+- `POST /accounts`
+  - Headers: `X-Tenant-Id`, optional `X-Actor-Id`
+  - Body supports `contra` accounts.
+  - Success: `201 Created`
 
-**200 OK:**
-```json
-{
-  "content": [
-    {
-      "journalEntryId": "...",
-      "postedDate": "2026-02-25",
-      "status": "POSTED",
-      "description": "Manual correction",
-      "referenceId": "INV-9921-CORRECTION",
-      "transactionCurrency": "USD",
-      "baseCurrency": "USD",
-      "exchangeRate": 1.0,
-      "lineCount": 2,
-      "createdBy": "admin@company.com",
-      "createdAt": "2026-02-25T10:05:00Z"
-    }
-  ],
-  "page": 0,
-  "size": 50,
-  "totalElements": 1
-}
-```
+- `GET /accounts`
+  - Headers: `X-Tenant-Id`
+  - Query: `accountType`, `isActive`, pageable params
+  - Success: `200 OK`
 
----
+- `GET /accounts/{accountCode}`
+  - Headers: `X-Tenant-Id`
+  - Success: `200 OK`
 
-## 3. Journal Entry Reversals
+- `PATCH /accounts/{accountCode}`
+  - Headers: `X-Tenant-Id`, optional `X-Actor-Id`
+  - Purpose: Update account name or active state.
+  - Success: `200 OK`
 
-### POST `/journal-entries/{journalEntryId}/reverse`
-Fully reverse a posted Journal Entry.
+### Accounting Periods
 
-**Request Body:**
-```json
-{
-  "eventId": "reverse_550e8400e29b",
-  "reason": "Duplicate posting detected for invoice INV-9921"
-}
-```
+- `POST /accounting-periods`
+  - Headers: `X-Tenant-Id`
+  - Success: `201 Created`
 
-**201 Created:**
-```json
-{
-  "reversalJournalEntryId": "...",
-  "originalJournalEntryId": "...",
-  "status": "POSTED",
-  "message": "Reversal entry posted. Original entry remains immutable."
-}
-```
+- `GET /accounting-periods`
+  - Headers: `X-Tenant-Id`
+  - Query: `status`
+  - Success: `200 OK`
 
-**409 Conflict** (reversal already exists):
-```json
-{
-  "type": "/problems/invalid-reversal",
-  "title": "Invalid Reversal",
-  "status": 409,
-  "detail": "Journal Entry '550e...' already has a posted reversal entry.",
-  "instance": "/v1/journal-entries/550e.../reverse"
-}
-```
+- `PATCH /accounting-periods/{periodId}/status`
+  - Headers: `X-Tenant-Id`, optional `X-Actor-Id`
+  - Body: target status
+  - Success: `200 OK`
 
----
+### Exchange Rates
 
-## Ledger Immutability Contract
+- `POST /exchange-rates`
+  - Headers: `X-Tenant-Id`
+  - Success: `201 Created`
 
-- `fis_journal_entry` and `fis_journal_line` are append-only after posting.
-- Corrections must be represented by compensating/reversal entries.
-- In PostgreSQL, `UPDATE` and `DELETE` on these ledger tables are blocked by database triggers.
+- `GET /exchange-rates`
+  - Headers: `X-Tenant-Id`
+  - Query: `sourceCurrency`, `targetCurrency`, optional `effectiveDate`
+  - Success: `200 OK`
 
----
+### Mapping Rules
 
-## 4. Account Management
+- `POST /mapping-rules`
+  - Headers: `X-Tenant-Id`
+  - Success: `201 Created`
 
-### POST `/accounts`
-Create a new account in the Chart of Accounts.
+- `GET /mapping-rules`
+  - Headers: `X-Tenant-Id`
+  - Query: `eventType`, `isActive`, `page`, `size`
+  - Success: `200 OK`
 
-```json
-{
-  "code": "1000-CASH",
-  "name": "Cash and Cash Equivalents",
-  "accountType": "ASSET",
-  "currencyCode": "USD",
-  "parentAccountCode": null
-}
-```
+- `PUT /mapping-rules/{id}`
+  - Headers: `X-Tenant-Id`
+  - Success: `200 OK`
 
-**201 Created:**
-```json
-{
-  "accountId": "...",
-  "code": "1000-CASH",
-  "name": "Cash and Cash Equivalents",
-  "currentBalanceCents": 0
-}
-```
+- `DELETE /mapping-rules/{id}`
+  - Headers: `X-Tenant-Id`, optional `X-Actor-Id`
+  - Success: `204 No Content`
 
-### GET `/accounts`
-List all accounts (paginated, filterable by `accountType`, `isActive`).
+### FX Revaluation and Settlement
 
-### GET `/accounts/{accountCode}`
-Get account details including current balance.
+- `POST /revaluations/periods/{periodId}`
+  - Headers: `X-Tenant-Id`
+  - Purpose: Period-end unrealized FX revaluation.
+  - Success: `201 Created`
 
-**200 OK:**
-```json
-{
-  "accountId": "...",
-  "code": "1000-CASH",
-  "name": "Cash and Cash Equivalents",
-  "accountType": "ASSET",
-  "currencyCode": "USD",
-  "currentBalanceCents": 12500000,
-  "formattedBalance": "125,000.00",
-  "isActive": true,
-  "parentAccountCode": null,
-  "asOf": "2026-02-25T10:06:00Z"
-}
-```
+- `POST /settlements`
+  - Headers: `X-Tenant-Id`
+  - Purpose: Realized FX settlement adjustment posting.
+  - Success: `201 Created`
 
-### PATCH `/accounts/{accountCode}`
-Update account name or deactivate. Cannot change `accountType` or `code`.
+### Admin
 
-```json
-{
-  "name": "Cash & Equivalents",
-  "isActive": false
-}
-```
+- `GET /admin/integrity-check`
+  - Headers: `X-Tenant-Id`
+  - Purpose: Verify accounting equation totals and delta.
+  - Success: `200 OK`
 
----
+## OpenAPI Source of Truth
 
-## 5. Accounting Period Management
+Machine-readable spec: `src/main/resources/static/openapi.yaml`  
+Swagger UI static page: `src/main/resources/static/swagger-ui.html`
 
-### POST `/accounting-periods`
-Create a new Accounting Period.
+## Planned (SRS v2.0, Not Yet Implemented Here)
 
-```json
-{
-  "name": "2026-03",
-  "startDate": "2026-03-01",
-  "endDate": "2026-03-31"
-}
-```
+These are required by SRS v2.0 but are not implemented in this service code yet:
 
-### GET `/accounting-periods`
-List all periods (filterable by `status`).
+- Ledger management APIs (`/ledgers` family)
+- Reporting APIs (`/reports/trial-balance`, `/reports/balance-sheet`, `/reports/income-statement`, `/reports/general-ledger/{code}`)
+- Batch JE posting (`/journal-entries/batch`)
+- Account aggregated balance (`/accounts/{code}/aggregated-balance`)
+- Year-end close (`/admin/year-end-close`)
 
-### PATCH `/accounting-periods/{periodId}/status`
-Transition a period's state.
-
-```json
-{
-  "action": "SOFT_CLOSE"
-}
-```
-Valid actions: `OPEN`, `SOFT_CLOSE`, `HARD_CLOSE`, `REOPEN`.
-
----
-
-## 6. Mapping Rules Management
-
-### POST `/mapping-rules`
-Create a new mapping rule.
-
-```json
-{
-  "eventType": "SALARY_DISBURSED",
-  "description": "Maps payroll salary events to Salary Expense and Bank accounts",
-  "lines": [
-    { "accountCodeExpression": "6100-SALARY-EXPENSE", "isCredit": false, "amountExpression": "${payload.amountCents}" },
-    { "accountCodeExpression": "1000-CASH", "isCredit": true, "amountExpression": "${payload.amountCents}" }
-  ]
-}
-```
-
-### GET `/mapping-rules`
-List all rules (filterable by `eventType`, `isActive`).
-
-### PUT `/mapping-rules/{ruleId}`
-Update a mapping rule (increments `version`, logged to audit).
-
-### DELETE `/mapping-rules/{ruleId}`
-Deactivate a mapping rule (soft delete, sets `isActive = false`).
-
----
-
-## 7. Exchange Rates
-
-### POST `/exchange-rates`
-Upload daily exchange rates.
-
-```json
-{
-  "rates": [
-    { "sourceCurrency": "GBP", "targetCurrency": "USD", "rate": 1.27150000, "effectiveDate": "2026-02-25" },
-    { "sourceCurrency": "EUR", "targetCurrency": "USD", "rate": 1.08320000, "effectiveDate": "2026-02-25" }
-  ]
-}
-```
-
-### GET `/exchange-rates?sourceCurrency=GBP&targetCurrency=USD&effectiveDate=2026-02-25`
-Query a specific rate.
+When these are delivered, both OpenAPI and this document must be updated in the same change set.
