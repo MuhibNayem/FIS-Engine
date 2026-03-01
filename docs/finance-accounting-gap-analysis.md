@@ -57,16 +57,16 @@ This document catalogs **16 identified gaps** across 5 categories, classifying e
 
 ---
 
-### GAP-04 · Hash Chain Race Condition (Unmitigated)
+### GAP-04 · Hash Chain Race Condition (Mitigated)
 
 | Attribute | Detail |
 |---|---|
 | **Severity** | High |
 | **Principle** | Tamper-Evident Audit Trail |
-| **Current Behavior** | `HashChainServiceImpl` calls `getLatestHash(tenantId)` and `computeHash()` sequentially, but two concurrent JEs for the same tenant can both read the same "latest hash" before either commits. |
-| **Gap** | Under concurrent writes, the hash chain forks — two entries claim the same `previousHash`, breaking the chain's integrity guarantee. Risk register item R-06 acknowledges this but the mitigation (`SELECT FOR UPDATE` on a tenant-level hash row) is **not implemented**. |
-| **Risk** | Tamper detection becomes unreliable under load. |
-| **Recommendation** | Introduce a `fis_tenant_hash_head` table with one row per tenant, and acquire `SELECT FOR UPDATE` on it before computing the next hash. This serializes hash computation per tenant without blocking other tenants. |
+| **Current Behavior** | Ledger posting allocates sequence numbers with a tenant+fiscal-year serialized path (`fis_journal_sequence` with `SELECT ... FOR UPDATE`), then computes `previousHash` from the same tenant+fiscal-year sequence order. |
+| **Gap** | Original fork risk under concurrency has been closed for the active posting path; the remaining tradeoff is controlled serialization per tenant+fiscal-year. |
+| **Risk** | Throughput contention can increase on very hot tenant/fiscal-year partitions, but chain integrity remains preserved. |
+| **Recommendation** | Keep contention metrics (`fis.hash.chain.sequence.lock.wait`) and monitor p95 lock wait under load; shard further only if production contention exceeds SLO. |
 
 ---
 

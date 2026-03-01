@@ -62,6 +62,23 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
                         .orElseThrow(() -> new ExchangeRateNotFoundException(source, target)));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public BigDecimal resolveAverageRate(
+            UUID tenantId,
+            String sourceCurrency,
+            String targetCurrency,
+            LocalDate fromDate,
+            LocalDate toDate) {
+        String source = normalizeCurrency(sourceCurrency);
+        String target = normalizeCurrency(targetCurrency);
+        if (source.equals(target)) {
+            return BigDecimal.ONE;
+        }
+        return exchangeRateRepository.findAverageRateInRange(tenantId, source, target, fromDate, toDate)
+                .orElseGet(() -> resolveRate(tenantId, source, target, toDate));
+    }
+
     private ExchangeRate upsert(UUID tenantId, ExchangeRateEntryDto rate) {
         String source = normalizeCurrency(rate.getSourceCurrency());
         String target = normalizeCurrency(rate.getTargetCurrency());

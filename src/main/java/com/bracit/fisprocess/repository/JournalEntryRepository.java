@@ -20,51 +20,85 @@ import java.util.UUID;
  */
 public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID> {
 
-    Optional<JournalEntry> findByTenantIdAndId(UUID tenantId, UUID journalEntryId);
+        Optional<JournalEntry> findByTenantIdAndId(UUID tenantId, UUID journalEntryId);
 
-    @EntityGraph(attributePaths = {"lines", "lines.account"})
-    Optional<JournalEntry> findWithLinesByTenantIdAndId(UUID tenantId, UUID journalEntryId);
+        @EntityGraph(attributePaths = { "lines", "lines.account" })
+        Optional<JournalEntry> findWithLinesByTenantIdAndId(UUID tenantId, UUID journalEntryId);
 
-    Optional<JournalEntry> findByTenantIdAndEventId(UUID tenantId, String eventId);
+        Optional<JournalEntry> findByTenantIdAndEventId(UUID tenantId, String eventId);
 
-    List<JournalEntry> findByTenantIdOrderByCreatedAtAsc(UUID tenantId);
+        List<JournalEntry> findByTenantIdOrderByCreatedAtAsc(UUID tenantId);
 
-    /**
-     * Returns the most recently created journal entry for hash chain computation.
-     * Used to retrieve the previous hash when posting a new entry.
-     */
-    Optional<JournalEntry> findTopByTenantIdOrderByCreatedAtDesc(UUID tenantId);
+        /**
+         * Returns the most recently created journal entry for hash chain computation.
+         * Used to retrieve the previous hash when posting a new entry.
+         */
+        Optional<JournalEntry> findTopByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
-    boolean existsByReversalOfId(UUID reversalOfId);
+        Optional<JournalEntry> findTopByTenantIdAndFiscalYearOrderBySequenceNumberDesc(UUID tenantId, Integer fiscalYear);
 
-    boolean existsByTenantIdAndEventId(UUID tenantId, String eventId);
+        boolean existsByReversalOfId(UUID reversalOfId);
 
-    long countByTenantIdAndEventId(UUID tenantId, String eventId);
+        boolean existsByTenantIdAndEventId(UUID tenantId, String eventId);
 
-    /**
-     * Filtered and paginated query for journal entries.
-     * All filter params are nullable — null values are ignored.
-     */
-    @Query("""
-            SELECT je FROM JournalEntry je
-            WHERE je.tenantId = :tenantId
-              AND (:postedDateFrom IS NULL OR je.postedDate >= :postedDateFrom)
-              AND (:postedDateTo IS NULL OR je.postedDate <= :postedDateTo)
-              AND (:accountCode IS NULL OR EXISTS (
-                    SELECT 1 FROM JournalLine jl
-                    WHERE jl.journalEntry = je
-                      AND jl.account.code = :accountCode
-              ))
-              AND (:status IS NULL OR je.status = :status)
-              AND (:referenceId IS NULL OR je.referenceId = :referenceId)
-            ORDER BY je.createdAt DESC
-            """)
-    Page<JournalEntry> findByTenantIdWithFilters(
-            @Param("tenantId") UUID tenantId,
-            @Param("postedDateFrom") @Nullable LocalDate postedDateFrom,
-            @Param("postedDateTo") @Nullable LocalDate postedDateTo,
-            @Param("accountCode") @Nullable String accountCode,
-            @Param("status") @Nullable JournalStatus status,
-            @Param("referenceId") @Nullable String referenceId,
-            Pageable pageable);
+        long countByTenantIdAndEventId(UUID tenantId, String eventId);
+
+        @Query("""
+                        SELECT je.eventId
+                        FROM JournalEntry je
+                        WHERE je.tenantId = :tenantId
+                          AND je.eventId IN :eventIds
+                        """)
+        List<String> findExistingEventIds(
+                        @Param("tenantId") UUID tenantId,
+                        @Param("eventIds") List<String> eventIds);
+
+        /**
+         * Finds all auto-reversible journal entries for a tenant posted within the
+         * given date range
+         * that have not already been reversed.
+         */
+        @Query("""
+                        SELECT je FROM JournalEntry je
+                        WHERE je.tenantId = :tenantId
+                          AND je.autoReverse = true
+                          AND je.postedDate >= :fromDate
+                          AND je.postedDate <= :toDate
+                          AND je.status = 'POSTED'
+                          AND NOT EXISTS (
+                              SELECT 1 FROM JournalEntry rev
+                              WHERE rev.reversalOfId = je.id
+                          )
+                        """)
+        List<JournalEntry> findAutoReverseEntries(
+                        @Param("tenantId") UUID tenantId,
+                        @Param("fromDate") LocalDate fromDate,
+                        @Param("toDate") LocalDate toDate);
+
+        /**
+         * Filtered and paginated query for journal entries.
+         * All filter params are nullable — null values are ignored.
+         */
+        @Query("""
+                        SELECT je FROM JournalEntry je
+                        WHERE je.tenantId = :tenantId
+                          AND (:postedDateFrom IS NULL OR je.postedDate >= :postedDateFrom)
+                          AND (:postedDateTo IS NULL OR je.postedDate <= :postedDateTo)
+                          AND (:accountCode IS NULL OR EXISTS (
+                                SELECT 1 FROM JournalLine jl
+                                WHERE jl.journalEntry = je
+                                  AND jl.account.code = :accountCode
+                          ))
+                          AND (:status IS NULL OR je.status = :status)
+                          AND (:referenceId IS NULL OR je.referenceId = :referenceId)
+                        ORDER BY je.createdAt DESC
+                        """)
+        Page<JournalEntry> findByTenantIdWithFilters(
+                        @Param("tenantId") UUID tenantId,
+                        @Param("postedDateFrom") @Nullable LocalDate postedDateFrom,
+                        @Param("postedDateTo") @Nullable LocalDate postedDateTo,
+                        @Param("accountCode") @Nullable String accountCode,
+                        @Param("status") @Nullable JournalStatus status,
+                        @Param("referenceId") @Nullable String referenceId,
+                        Pageable pageable);
 }

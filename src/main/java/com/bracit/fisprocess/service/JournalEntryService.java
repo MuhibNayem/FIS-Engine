@@ -1,7 +1,9 @@
 package com.bracit.fisprocess.service;
 
 import com.bracit.fisprocess.domain.enums.JournalStatus;
+import com.bracit.fisprocess.dto.request.CreateJournalEntryBatchRequestDto;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryRequestDto;
+import com.bracit.fisprocess.dto.response.JournalEntryBatchResponseDto;
 import com.bracit.fisprocess.dto.response.JournalEntryResponseDto;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -27,6 +29,12 @@ public interface JournalEntryService {
     JournalEntryResponseDto createJournalEntry(
             UUID tenantId,
             CreateJournalEntryRequestDto request,
+            @Nullable String actorRoleHeader,
+            @Nullable String traceparent);
+
+    JournalEntryBatchResponseDto createJournalEntriesBatch(
+            UUID tenantId,
+            CreateJournalEntryBatchRequestDto request,
             @Nullable String actorRoleHeader,
             @Nullable String traceparent);
 

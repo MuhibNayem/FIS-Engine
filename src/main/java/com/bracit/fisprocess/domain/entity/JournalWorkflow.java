@@ -56,6 +56,12 @@ public class JournalWorkflow {
     @Column(name = "posted_date", nullable = false)
     private LocalDate postedDate;
 
+    @Column(name = "effective_date", nullable = false)
+    private LocalDate effectiveDate;
+
+    @Column(name = "transaction_date", nullable = false)
+    private LocalDate transactionDate;
+
     @Nullable
     private String description;
 

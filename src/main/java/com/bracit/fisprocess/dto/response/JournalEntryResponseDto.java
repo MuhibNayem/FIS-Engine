@@ -23,6 +23,8 @@ public class JournalEntryResponseDto {
 
     private UUID journalEntryId;
     private LocalDate postedDate;
+    private LocalDate effectiveDate;
+    private LocalDate transactionDate;
     private JournalStatus status;
     @Nullable
     private String description;

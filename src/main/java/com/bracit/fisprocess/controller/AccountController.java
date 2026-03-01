@@ -106,4 +106,20 @@ public class AccountController {
         AccountResponseDto response = accountService.updateAccount(tenantId, accountCode, request, performedBy);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Retrieves an account's aggregated balance — the sum of its own balance
+     * plus all descendant account balances in the hierarchy.
+     *
+     * @param tenantId    the tenant UUID
+     * @param accountCode the account code
+     * @return 200 OK with account details including aggregatedBalanceCents
+     */
+    @GetMapping("/{accountCode}/aggregated-balance")
+    public ResponseEntity<AccountResponseDto> getAggregatedBalance(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable String accountCode) {
+        AccountResponseDto response = accountService.getAggregatedBalance(tenantId, accountCode);
+        return ResponseEntity.ok(response);
+    }
 }

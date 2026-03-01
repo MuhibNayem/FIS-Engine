@@ -32,6 +32,9 @@ public class AccountResponseDto {
     @Nullable
     private String parentAccountCode;
 
+    @Nullable
+    private Long aggregatedBalanceCents;
+
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

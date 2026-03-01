@@ -40,204 +40,295 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("AccountController Integration Tests")
 class AccountControllerIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    private BusinessEntityRepository businessEntityRepository;
+        @Autowired
+        private BusinessEntityRepository businessEntityRepository;
 
-    private final JsonMapper jsonMapper = JsonMapper.builder().build();
-    private UUID tenantId;
+        private final JsonMapper jsonMapper = JsonMapper.builder().build();
+        private UUID tenantId;
 
-    @BeforeEach
-    void setUp() {
-        BusinessEntity tenant = BusinessEntity.builder()
-                .name("Integration Test Corp")
-                .baseCurrency("USD")
-                .isActive(true)
-                .build();
-        BusinessEntity savedTenant = businessEntityRepository.save(tenant);
-        tenantId = savedTenant.getTenantId();
-    }
-
-    private String toJson(Object obj) throws Exception {
-        return jsonMapper.writeValueAsString(obj);
-    }
-
-    // --- POST /v1/accounts ---
-
-    @Nested
-    @DisplayName("POST /v1/accounts")
-    class CreateAccountEndpointTests {
-
-        @Test
-        @DisplayName("should return 201 with created account")
-        void shouldCreateAccountSuccessfully() throws Exception {
-            CreateAccountRequestDto request = CreateAccountRequestDto.builder()
-                    .code("1100-CASH-" + UUID.randomUUID().toString().substring(0, 8))
-                    .name("Cash")
-                    .accountType(AccountType.ASSET)
-                    .currencyCode("USD")
-                    .build();
-
-            mockMvc.perform(post("/v1/accounts")
-                    .header("X-Tenant-Id", tenantId.toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(toJson(request)))
-                    .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.code", notNullValue()))
-                    .andExpect(jsonPath("$.accountType", is("ASSET")))
-                    .andExpect(jsonPath("$.currentBalanceCents", is(0)));
+        @BeforeEach
+        void setUp() {
+                BusinessEntity tenant = BusinessEntity.builder()
+                                .name("Integration Test Corp")
+                                .baseCurrency("USD")
+                                .isActive(true)
+                                .build();
+                BusinessEntity savedTenant = businessEntityRepository.save(tenant);
+                tenantId = savedTenant.getTenantId();
         }
 
-        @Test
-        @DisplayName("should return 409 for duplicate account code")
-        void shouldReturn409ForDuplicateCode() throws Exception {
-            String code = "DUP-" + UUID.randomUUID().toString().substring(0, 8);
-            CreateAccountRequestDto request = CreateAccountRequestDto.builder()
-                    .code(code)
-                    .name("First Account")
-                    .accountType(AccountType.ASSET)
-                    .currencyCode("USD")
-                    .build();
-
-            String json = toJson(request);
-
-            // Create the first account
-            mockMvc.perform(post("/v1/accounts")
-                    .header("X-Tenant-Id", tenantId.toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(json))
-                    .andExpect(status().isCreated());
-
-            // Try to create a duplicate
-            mockMvc.perform(post("/v1/accounts")
-                    .header("X-Tenant-Id", tenantId.toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(json))
-                    .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.type", is("/problems/duplicate-account-code")));
+        private String toJson(Object obj) throws Exception {
+                return jsonMapper.writeValueAsString(obj);
         }
 
-        @Test
-        @DisplayName("should return 400 for missing required fields")
-        void shouldReturn400ForMissingFields() throws Exception {
-            mockMvc.perform(post("/v1/accounts")
-                    .header("X-Tenant-Id", tenantId.toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("{}"))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.type", is("/problems/validation-failed")));
+        // --- POST /v1/accounts ---
+
+        @Nested
+        @DisplayName("POST /v1/accounts")
+        class CreateAccountEndpointTests {
+
+                @Test
+                @DisplayName("should return 201 with created account")
+                void shouldCreateAccountSuccessfully() throws Exception {
+                        CreateAccountRequestDto request = CreateAccountRequestDto.builder()
+                                        .code("1100-CASH-" + UUID.randomUUID().toString().substring(0, 8))
+                                        .name("Cash")
+                                        .accountType(AccountType.ASSET)
+                                        .currencyCode("USD")
+                                        .build();
+
+                        mockMvc.perform(post("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(request)))
+                                        .andExpect(status().isCreated())
+                                        .andExpect(jsonPath("$.code", notNullValue()))
+                                        .andExpect(jsonPath("$.accountType", is("ASSET")))
+                                        .andExpect(jsonPath("$.currentBalanceCents", is(0)));
+                }
+
+                @Test
+                @DisplayName("should return 409 for duplicate account code")
+                void shouldReturn409ForDuplicateCode() throws Exception {
+                        String code = "DUP-" + UUID.randomUUID().toString().substring(0, 8);
+                        CreateAccountRequestDto request = CreateAccountRequestDto.builder()
+                                        .code(code)
+                                        .name("First Account")
+                                        .accountType(AccountType.ASSET)
+                                        .currencyCode("USD")
+                                        .build();
+
+                        String json = toJson(request);
+
+                        // Create the first account
+                        mockMvc.perform(post("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(json))
+                                        .andExpect(status().isCreated());
+
+                        // Try to create a duplicate
+                        mockMvc.perform(post("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(json))
+                                        .andExpect(status().isConflict())
+                                        .andExpect(jsonPath("$.type", is("/problems/duplicate-account-code")));
+                }
+
+                @Test
+                @DisplayName("should return 400 for missing required fields")
+                void shouldReturn400ForMissingFields() throws Exception {
+                        mockMvc.perform(post("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content("{}"))
+                                        .andExpect(status().isBadRequest())
+                                        .andExpect(jsonPath("$.type", is("/problems/validation-failed")));
+                }
         }
-    }
 
-    // --- GET /v1/accounts/{code} ---
+        // --- GET /v1/accounts/{code} ---
 
-    @Nested
-    @DisplayName("GET /v1/accounts/{code}")
-    class GetAccountEndpointTests {
+        @Nested
+        @DisplayName("GET /v1/accounts/{code}")
+        class GetAccountEndpointTests {
 
-        @Test
-        @DisplayName("should return 200 with account details")
-        void shouldReturnAccount() throws Exception {
-            String code = "GET-" + UUID.randomUUID().toString().substring(0, 8);
-            CreateAccountRequestDto createReq = CreateAccountRequestDto.builder()
-                    .code(code)
-                    .name("Test Get")
-                    .accountType(AccountType.REVENUE)
-                    .currencyCode("USD")
-                    .build();
+                @Test
+                @DisplayName("should return 200 with account details")
+                void shouldReturnAccount() throws Exception {
+                        String code = "GET-" + UUID.randomUUID().toString().substring(0, 8);
+                        CreateAccountRequestDto createReq = CreateAccountRequestDto.builder()
+                                        .code(code)
+                                        .name("Test Get")
+                                        .accountType(AccountType.REVENUE)
+                                        .currencyCode("USD")
+                                        .build();
 
-            mockMvc.perform(post("/v1/accounts")
-                    .header("X-Tenant-Id", tenantId.toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(toJson(createReq)))
-                    .andExpect(status().isCreated());
+                        mockMvc.perform(post("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(createReq)))
+                                        .andExpect(status().isCreated());
 
-            mockMvc.perform(get("/v1/accounts/{code}", code)
-                    .header("X-Tenant-Id", tenantId.toString()))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.code", equalTo(code)));
+                        mockMvc.perform(get("/v1/accounts/{code}", code)
+                                        .header("X-Tenant-Id", tenantId.toString()))
+                                        .andExpect(status().isOk())
+                                        .andExpect(jsonPath("$.code", equalTo(code)));
+                }
+
+                @Test
+                @DisplayName("should return 404 for non-existent account")
+                void shouldReturn404ForNotFound() throws Exception {
+                        mockMvc.perform(get("/v1/accounts/{code}", "NONEXISTENT-CODE")
+                                        .header("X-Tenant-Id", tenantId.toString()))
+                                        .andExpect(status().isNotFound())
+                                        .andExpect(jsonPath("$.type", is("/problems/account-not-found")));
+                }
         }
 
-        @Test
-        @DisplayName("should return 404 for non-existent account")
-        void shouldReturn404ForNotFound() throws Exception {
-            mockMvc.perform(get("/v1/accounts/{code}", "NONEXISTENT-CODE")
-                    .header("X-Tenant-Id", tenantId.toString()))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.type", is("/problems/account-not-found")));
+        // --- PATCH /v1/accounts/{code} ---
+
+        @Nested
+        @DisplayName("PATCH /v1/accounts/{code}")
+        class UpdateAccountEndpointTests {
+
+                @Test
+                @DisplayName("should deactivate account successfully")
+                void shouldDeactivateAccount() throws Exception {
+                        String code = "DEACT-" + UUID.randomUUID().toString().substring(0, 8);
+                        CreateAccountRequestDto createReq = CreateAccountRequestDto.builder()
+                                        .code(code)
+                                        .name("Deactivate Me")
+                                        .accountType(AccountType.EXPENSE)
+                                        .currencyCode("USD")
+                                        .build();
+
+                        mockMvc.perform(post("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(createReq)))
+                                        .andExpect(status().isCreated());
+
+                        UpdateAccountRequestDto updateReq = UpdateAccountRequestDto.builder()
+                                        .isActive(false)
+                                        .build();
+
+                        mockMvc.perform(patch("/v1/accounts/{code}", code)
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(updateReq)))
+                                        .andExpect(status().isOk())
+                                        .andExpect(jsonPath("$.active", is(false)));
+                }
         }
-    }
 
-    // --- PATCH /v1/accounts/{code} ---
+        // --- GET /v1/accounts ---
 
-    @Nested
-    @DisplayName("PATCH /v1/accounts/{code}")
-    class UpdateAccountEndpointTests {
+        @Nested
+        @DisplayName("GET /v1/accounts")
+        class ListAccountsEndpointTests {
 
-        @Test
-        @DisplayName("should deactivate account successfully")
-        void shouldDeactivateAccount() throws Exception {
-            String code = "DEACT-" + UUID.randomUUID().toString().substring(0, 8);
-            CreateAccountRequestDto createReq = CreateAccountRequestDto.builder()
-                    .code(code)
-                    .name("Deactivate Me")
-                    .accountType(AccountType.EXPENSE)
-                    .currencyCode("USD")
-                    .build();
-
-            mockMvc.perform(post("/v1/accounts")
-                    .header("X-Tenant-Id", tenantId.toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(toJson(createReq)))
-                    .andExpect(status().isCreated());
-
-            UpdateAccountRequestDto updateReq = UpdateAccountRequestDto.builder()
-                    .isActive(false)
-                    .build();
-
-            mockMvc.perform(patch("/v1/accounts/{code}", code)
-                    .header("X-Tenant-Id", tenantId.toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(toJson(updateReq)))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.active", is(false)));
+                @Test
+                @DisplayName("should return paginated list")
+                void shouldReturnPaginatedList() throws Exception {
+                        mockMvc.perform(get("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .param("page", "0")
+                                        .param("size", "10"))
+                                        .andExpect(status().isOk())
+                                        .andExpect(jsonPath("$", hasKey("content")));
+                }
         }
-    }
 
-    // --- GET /v1/accounts ---
+        // --- Missing Header Tests ---
 
-    @Nested
-    @DisplayName("GET /v1/accounts")
-    class ListAccountsEndpointTests {
+        @Nested
+        @DisplayName("Missing X-Tenant-Id header")
+        class MissingHeaderTests {
 
-        @Test
-        @DisplayName("should return paginated list")
-        void shouldReturnPaginatedList() throws Exception {
-            mockMvc.perform(get("/v1/accounts")
-                    .header("X-Tenant-Id", tenantId.toString())
-                    .param("page", "0")
-                    .param("size", "10"))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$", hasKey("content")));
+                @Test
+                @DisplayName("should return 400 when X-Tenant-Id header is missing")
+                void shouldReturn400WhenTenantHeaderMissing() throws Exception {
+                        mockMvc.perform(post("/v1/accounts")
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                        "{\"code\":\"NO-HEADER\",\"name\":\"No Header\",\"accountType\":\"ASSET\",\"currencyCode\":\"USD\"}"))
+                                        .andExpect(status().isBadRequest());
+                }
         }
-    }
 
-    // --- Missing Header Tests ---
+        // --- GET /v1/accounts/{code}/aggregated-balance ---
 
-    @Nested
-    @DisplayName("Missing X-Tenant-Id header")
-    class MissingHeaderTests {
+        @Nested
+        @DisplayName("GET /v1/accounts/{code}/aggregated-balance")
+        class AggregatedBalanceEndpointTests {
 
-        @Test
-        @DisplayName("should return 400 when X-Tenant-Id header is missing")
-        void shouldReturn400WhenTenantHeaderMissing() throws Exception {
-            mockMvc.perform(post("/v1/accounts")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                            "{\"code\":\"NO-HEADER\",\"name\":\"No Header\",\"accountType\":\"ASSET\",\"currencyCode\":\"USD\"}"))
-                    .andExpect(status().isBadRequest());
+                @Test
+                @DisplayName("should return aggregated balance = sum of parent + 3 children")
+                void shouldAggregateParentWithChildren() throws Exception {
+                        String suffix = UUID.randomUUID().toString().substring(0, 8);
+                        String parentCode = "PARENT-" + suffix;
+
+                        // Create parent account
+                        mockMvc.perform(post("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(CreateAccountRequestDto.builder()
+                                                        .code(parentCode)
+                                                        .name("Parent Assets")
+                                                        .accountType(AccountType.ASSET)
+                                                        .currencyCode("USD")
+                                                        .build())))
+                                        .andExpect(status().isCreated());
+
+                        // Create 3 child accounts under the parent
+                        for (int i = 1; i <= 3; i++) {
+                                mockMvc.perform(post("/v1/accounts")
+                                                .header("X-Tenant-Id", tenantId.toString())
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(toJson(CreateAccountRequestDto.builder()
+                                                                .code("CHILD-" + i + "-" + suffix)
+                                                                .name("Child " + i)
+                                                                .accountType(AccountType.ASSET)
+                                                                .currencyCode("USD")
+                                                                .parentAccountCode(parentCode)
+                                                                .build())))
+                                                .andExpect(status().isCreated());
+                        }
+
+                        // All balances are 0 (no journal entries), so aggregated should be 0
+                        mockMvc.perform(get("/v1/accounts/{code}/aggregated-balance", parentCode)
+                                        .header("X-Tenant-Id", tenantId.toString()))
+                                        .andExpect(status().isOk())
+                                        .andExpect(jsonPath("$.code", is(parentCode)))
+                                        .andExpect(jsonPath("$.aggregatedBalanceCents", is(0)));
+                }
+
+                @Test
+                @DisplayName("should return own balance when account has no children")
+                void shouldReturnOwnBalanceForLeafAccount() throws Exception {
+                        String code = "LEAF-" + UUID.randomUUID().toString().substring(0, 8);
+
+                        // Create a leaf account (no children)
+                        mockMvc.perform(post("/v1/accounts")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(CreateAccountRequestDto.builder()
+                                                        .code(code)
+                                                        .name("Leaf Account")
+                                                        .accountType(AccountType.ASSET)
+                                                        .currencyCode("USD")
+                                                        .build())))
+                                        .andExpect(status().isCreated());
+
+                        // Aggregated balance = own balance = 0
+                        mockMvc.perform(get("/v1/accounts/{code}/aggregated-balance", code)
+                                        .header("X-Tenant-Id", tenantId.toString()))
+                                        .andExpect(status().isOk())
+                                        .andExpect(jsonPath("$.code", is(code)))
+                                        .andExpect(jsonPath("$.aggregatedBalanceCents", is(0)))
+                                        .andExpect(jsonPath("$.currentBalanceCents", is(0)));
+                }
+
+                @Test
+                @DisplayName("should return 404 for non-existent account")
+                void shouldReturn404ForNonExistentAccount() throws Exception {
+                        mockMvc.perform(get("/v1/accounts/{code}/aggregated-balance", "NONEXISTENT")
+                                        .header("X-Tenant-Id", tenantId.toString()))
+                                        .andExpect(status().isNotFound());
+                }
+
+                @Test
+                @DisplayName("should return 400 for invalid account code format")
+                void shouldReturn400ForInvalidAccountCodeFormat() throws Exception {
+                        mockMvc.perform(get("/v1/accounts/{code}/aggregated-balance", "BAD CODE !")
+                                        .header("X-Tenant-Id", tenantId.toString()))
+                                        .andExpect(status().isBadRequest())
+                                        .andExpect(jsonPath("$.type", is("/problems/validation-failed")));
+                }
         }
-    }
 }

@@ -5,8 +5,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -26,7 +30,10 @@ import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -35,17 +42,32 @@ import java.util.Base64;
 public class SecurityConfig {
 
     private final BusinessEntityRepository businessEntityRepository;
+    private static final String[] INSECURE_ALLOWED_PROFILES = { "dev", "test", "local" };
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http,
-            @Value("${fis.security.enabled:true}") boolean securityEnabled) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            Environment environment,
+            @Value("${fis.security.enabled:true}") boolean securityEnabled,
+            @Value("${fis.security.jwt.enforce-tenant-claim:true}") boolean enforceTenantClaim,
+            @Value("${fis.security.jwt.tenant-claim-name:tenant_id}") String tenantClaimName) throws Exception {
         if (!securityEnabled) {
+            boolean explicitAllow = Boolean.parseBoolean(environment.getProperty(
+                    "fis.security.allow-insecure-mode", "false"));
+            boolean allowedProfile = Arrays.stream(environment.getActiveProfiles())
+                    .anyMatch(profile -> Arrays.stream(INSECURE_ALLOWED_PROFILES).anyMatch(profile::equalsIgnoreCase));
+            if (!(explicitAllow && allowedProfile)) {
+                throw new IllegalStateException(
+                        "Invalid configuration: fis.security.enabled=false is allowed only when "
+                                + "fis.security.allow-insecure-mode=true and profile is one of dev/test/local.");
+            }
             http.csrf(csrf -> csrf.disable())
                     .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
             return http.build();
         }
 
         http.csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/openapi.yaml", "/swagger-ui.html").permitAll()
@@ -66,6 +88,9 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .addFilterAfter(new TenantValidationFilter(businessEntityRepository), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(
+                        new TenantClaimBindingFilter(enforceTenantClaim, tenantClaimName),
+                        TenantValidationFilter.class)
                 .httpBasic(Customizer.withDefaults());
 
         return http.build();
@@ -113,5 +138,28 @@ public class SecurityConfig {
         } catch (Exception ex) {
             throw new IllegalStateException("Invalid RSA public key configuration", ex);
         }
+    }
+
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(
+            @Value("${fis.security.cors.allowed-origins:http://localhost:3000,http://localhost:5173}") String allowedOrigins) {
+        CorsConfiguration config = new CorsConfiguration();
+        List<String> origins = new ArrayList<>();
+        for (String origin : allowedOrigins.split(",")) {
+            String trimmed = origin.trim();
+            if (!trimmed.isEmpty()) {
+                origins.add(trimmed);
+            }
+        }
+        config.setAllowedOrigins(origins);
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id", "X-Actor-Role", "X-Actor-Id", "traceparent"));
+        config.setExposedHeaders(List.of("Retry-After"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(1800L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }

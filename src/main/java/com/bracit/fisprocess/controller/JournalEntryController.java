@@ -2,12 +2,14 @@ package com.bracit.fisprocess.controller;
 
 import com.bracit.fisprocess.domain.enums.JournalStatus;
 import com.bracit.fisprocess.dto.request.CorrectionRequestDto;
+import com.bracit.fisprocess.dto.request.CreateJournalEntryBatchRequestDto;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryRequestDto;
 import com.bracit.fisprocess.dto.request.ApproveWorkflowRequestDto;
 import com.bracit.fisprocess.dto.request.RejectWorkflowRequestDto;
 import com.bracit.fisprocess.dto.request.ReversalRequestDto;
 import com.bracit.fisprocess.dto.request.SubmitWorkflowRequestDto;
 import com.bracit.fisprocess.dto.response.JournalEntryResponseDto;
+import com.bracit.fisprocess.dto.response.JournalEntryBatchResponseDto;
 import com.bracit.fisprocess.dto.response.ReversalResponseDto;
 import com.bracit.fisprocess.dto.response.JournalWorkflowActionResponseDto;
 import com.bracit.fisprocess.service.JournalReversalService;
@@ -51,6 +53,17 @@ public class JournalEntryController {
             @RequestHeader(value = "traceparent", required = false) @Nullable String traceparent,
             @Valid @RequestBody CreateJournalEntryRequestDto request) {
         JournalEntryResponseDto response = journalEntryService.createJournalEntry(tenantId, request, actorRole, traceparent);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/batch")
+    public ResponseEntity<JournalEntryBatchResponseDto> createJournalEntriesBatch(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader(value = "X-Actor-Role", required = false) @Nullable String actorRole,
+            @RequestHeader(value = "traceparent", required = false) @Nullable String traceparent,
+            @Valid @RequestBody CreateJournalEntryBatchRequestDto request) {
+        JournalEntryBatchResponseDto response = journalEntryService.createJournalEntriesBatch(
+                tenantId, request, actorRole, traceparent);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

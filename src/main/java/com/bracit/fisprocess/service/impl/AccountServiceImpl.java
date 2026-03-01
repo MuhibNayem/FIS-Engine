@@ -28,6 +28,7 @@ import java.util.Currency;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Implementation of {@link AccountService} responsible for Account CRUD
@@ -42,6 +43,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AccountServiceImpl implements AccountService {
 
+    private static final Pattern ACCOUNT_CODE_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{1,50}$");
+
     private final AccountRepository accountRepository;
     private final BusinessEntityRepository businessEntityRepository;
     private final AuditService auditService;
@@ -51,6 +54,10 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public AccountResponseDto createAccount(UUID tenantId, CreateAccountRequestDto request, String performedBy) {
         validateTenantExists(tenantId);
+        validateAccountCodeFormat(request.getCode());
+        if (request.getParentAccountCode() != null) {
+            validateAccountCodeFormat(request.getParentAccountCode());
+        }
         validateAccountCodeUniqueness(tenantId, request.getCode());
 
         Account account = buildAccountFromRequest(tenantId, request);
@@ -79,6 +86,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     public AccountResponseDto getAccountByCode(UUID tenantId, String accountCode) {
         validateTenantExists(tenantId);
+        validateAccountCodeFormat(accountCode);
 
         Account account = findAccountOrThrow(tenantId, accountCode);
         return toResponseDto(account);
@@ -99,8 +107,10 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request, String performedBy) {
+    public AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request,
+            String performedBy) {
         validateTenantExists(tenantId);
+        validateAccountCodeFormat(accountCode);
 
         Account account = findAccountOrThrow(tenantId, accountCode);
         Map<String, Object> oldValue = Map.of(
@@ -112,7 +122,8 @@ public class AccountServiceImpl implements AccountService {
         Account updated = accountRepository.save(account);
         AccountResponseDto response = toResponseDto(updated);
 
-        AuditAction action = Boolean.FALSE.equals(request.getIsActive()) ? AuditAction.DEACTIVATED : AuditAction.UPDATED;
+        AuditAction action = Boolean.FALSE.equals(request.getIsActive()) ? AuditAction.DEACTIVATED
+                : AuditAction.UPDATED;
         auditService.logChange(
                 tenantId,
                 AuditEntityType.ACCOUNT,
@@ -130,6 +141,18 @@ public class AccountServiceImpl implements AccountService {
         return response;
     }
 
+    @Override
+    public AccountResponseDto getAggregatedBalance(UUID tenantId, String accountCode) {
+        validateTenantExists(tenantId);
+        validateAccountCodeFormat(accountCode);
+
+        Account account = findAccountOrThrow(tenantId, accountCode);
+        AccountResponseDto response = toResponseDto(account);
+        Long aggregated = accountRepository.findAggregatedBalance(tenantId, accountCode);
+        response.setAggregatedBalanceCents(aggregated != null ? aggregated : 0L);
+        return response;
+    }
+
     // --- Private Helper Methods ---
 
     private void validateTenantExists(UUID tenantId) {
@@ -140,6 +163,12 @@ public class AccountServiceImpl implements AccountService {
     private void validateAccountCodeUniqueness(UUID tenantId, String code) {
         if (accountRepository.existsByTenantIdAndCode(tenantId, code)) {
             throw new DuplicateAccountCodeException(code);
+        }
+    }
+
+    private void validateAccountCodeFormat(String accountCode) {
+        if (accountCode == null || !ACCOUNT_CODE_PATTERN.matcher(accountCode).matches()) {
+            throw new IllegalArgumentException("Invalid account code format");
         }
     }
 

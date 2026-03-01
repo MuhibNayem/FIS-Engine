@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 /**
  * Repository for FX rates.
@@ -45,4 +46,19 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
             @Param("sourceCurrency") String sourceCurrency,
             @Param("targetCurrency") String targetCurrency,
             @Param("effectiveDate") LocalDate effectiveDate);
+
+    @Query("""
+            SELECT AVG(r.rate)
+            FROM ExchangeRate r
+            WHERE r.tenantId = :tenantId
+              AND r.sourceCurrency = :sourceCurrency
+              AND r.targetCurrency = :targetCurrency
+              AND r.effectiveDate BETWEEN :fromDate AND :toDate
+            """)
+    Optional<BigDecimal> findAverageRateInRange(
+            @Param("tenantId") UUID tenantId,
+            @Param("sourceCurrency") String sourceCurrency,
+            @Param("targetCurrency") String targetCurrency,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
 }

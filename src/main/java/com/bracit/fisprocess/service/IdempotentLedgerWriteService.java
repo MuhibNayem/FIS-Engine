@@ -8,6 +8,16 @@ import java.util.function.Supplier;
  */
 public interface IdempotentLedgerWriteService {
 
+    default <T> T execute(
+            UUID tenantId, String eventId, Object payload, Class<T> responseType, java.util.function.Supplier<T> writeOperation) {
+        return execute(tenantId, eventId, payload, responseType, writeOperation, false);
+    }
+
     <T> T execute(
-            UUID tenantId, String eventId, Object payload, Class<T> responseType, Supplier<T> writeOperation);
+            UUID tenantId,
+            String eventId,
+            Object payload,
+            Class<T> responseType,
+            Supplier<T> writeOperation,
+            boolean allowProcessingRetry);
 }

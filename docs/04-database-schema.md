@@ -125,6 +125,8 @@ CREATE TABLE fis_journal_entry (
     tenant_id UUID NOT NULL REFERENCES fis_business_entity(tenant_id),
     event_id VARCHAR(255) NOT NULL,
     posted_date DATE NOT NULL,
+    effective_date DATE NOT NULL,
+    transaction_date DATE NOT NULL,
     description TEXT,
     reference_id VARCHAR(100),
     status VARCHAR(20) NOT NULL CHECK (status IN ('POSTED', 'REVERSAL', 'CORRECTION')),
@@ -140,6 +142,7 @@ CREATE TABLE fis_journal_entry (
 );
 
 CREATE INDEX idx_je_tenant_date ON fis_journal_entry(tenant_id, posted_date);
+CREATE INDEX idx_je_tenant_effective_date ON fis_journal_entry(tenant_id, effective_date);
 CREATE INDEX idx_je_reference ON fis_journal_entry(tenant_id, reference_id);
 CREATE INDEX idx_je_status ON fis_journal_entry(tenant_id, status);
 CREATE INDEX idx_je_reversal ON fis_journal_entry(reversal_of_id);
@@ -150,6 +153,11 @@ CREATE UNIQUE INDEX uq_je_single_reversal
 
 Append-only rule: posted rows in `fis_journal_entry` and `fis_journal_line` are never updated or deleted by application logic.
 In PostgreSQL, this is additionally enforced at the database level via triggers (see migration `V11__enforce_append_only_ledger`).
+
+Multi-date behavior (`V20`):
+- `effective_date` defaults from `posted_date` for existing and new rows when omitted by request.
+- `transaction_date` defaults from `posted_date` for existing and new rows when omitted by request.
+- Reporting queries use `effective_date` (with `posted_date` fallback for backward compatibility).
 
 ---
 
@@ -177,7 +185,7 @@ CREATE INDEX idx_jl_account ON fis_journal_line(account_id);
 
 ---
 
-## 8. Mapping Rules Configuration (Planned: Phase 5)
+## 8. Mapping Rules Configuration (`V14__create_mapping_rules.sql`)
 
 ```sql
 CREATE TABLE fis_mapping_rule (
@@ -207,7 +215,7 @@ CREATE INDEX idx_mapping_rule_event ON fis_mapping_rule(tenant_id, event_type);
 
 ---
 
-## 9. Audit Log (Planned: Phase 5)
+## 9. Audit Log (`V15__create_audit_log_and_revaluation_runs.sql`)
 
 Immutable log for tracking admin configuration changes.
 
@@ -255,6 +263,81 @@ CREATE INDEX idx_outbox_tenant ON fis_outbox(tenant_id, created_at);
 ## 11. Append-Only Triggers (`V11__enforce_append_only_ledger.sql`)
 
 `fis_journal_entry` and `fis_journal_line` are protected by PostgreSQL triggers that reject all `UPDATE` and `DELETE` operations.
+
+---
+
+## 12. Auto-Reversal Flag (`V19__add_auto_reverse_to_journal_entry.sql`)
+
+```sql
+ALTER TABLE fis_journal_entry
+    ADD COLUMN auto_reverse BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE INDEX idx_journal_auto_reverse
+    ON fis_journal_entry(tenant_id, auto_reverse, posted_date)
+    WHERE auto_reverse = TRUE;
+```
+
+---
+
+## 13. Reporting Performance Indexes (`V23__add_reporting_performance_indexes.sql`)
+
+Added to protect heavy reporting queries as dataset volume grows.
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_je_tenant_status_effective_date
+    ON fis_journal_entry (tenant_id, status, effective_date);
+
+CREATE INDEX IF NOT EXISTS idx_je_tenant_status_effective_seq
+    ON fis_journal_entry (tenant_id, status, effective_date, sequence_number);
+
+CREATE INDEX IF NOT EXISTS idx_jl_account_entry
+    ON fis_journal_line (account_id, journal_entry_id);
+
+CREATE INDEX IF NOT EXISTS idx_account_tenant_code_active
+    ON fis_account (tenant_id, code, is_active);
+
+CREATE INDEX IF NOT EXISTS idx_account_tenant_type_active
+    ON fis_account (tenant_id, account_type, is_active);
+```
+
+Reporting SQL now filters directly on `effective_date` to ensure these indexes are usable.
+
+---
+
+## 13. Journal Workflow Multi-Date Support (`V21__add_effective_and_transaction_dates_to_journal_workflow.sql`)
+
+```sql
+ALTER TABLE fis_journal_workflow
+    ADD COLUMN effective_date DATE NOT NULL,
+    ADD COLUMN transaction_date DATE NOT NULL;
+
+CREATE INDEX idx_workflow_tenant_effective_date
+    ON fis_journal_workflow (tenant_id, effective_date);
+```
+
+Draft workflow rows now preserve accounting dates (`effective_date`, `transaction_date`) through maker-checker approval.
+
+---
+
+## 14. Functional Translation Runs (`V22__create_period_translation_run.sql`)
+
+```sql
+CREATE TABLE fis_period_translation_run (
+    run_id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES fis_business_entity(tenant_id),
+    period_id UUID NOT NULL REFERENCES fis_accounting_period(period_id),
+    event_id VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('PROCESSING', 'COMPLETED', 'FAILED')),
+    details JSONB,
+    created_by VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE UNIQUE INDEX uq_translation_run_tenant_period ON fis_period_translation_run(tenant_id, period_id);
+```
+
+Used by R16 functional-currency translation to track period-level idempotent execution and generated CTA journal entries.
 
 ---
 

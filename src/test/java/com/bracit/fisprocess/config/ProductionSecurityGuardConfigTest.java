@@ -37,7 +37,7 @@ class ProductionSecurityGuardConfigTest {
     }
 
     @Test
-    @DisplayName("should allow security disabled outside prod")
+    @DisplayName("should allow security disabled in dev/test/local by SecurityConfig gate (not this prod guard)")
     void shouldAllowSecurityDisabledOutsideProd() {
         contextRunner
                 .withPropertyValues("fis.security.enabled=false")

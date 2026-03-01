@@ -26,6 +26,8 @@ public class DraftJournalEntry {
     private UUID tenantId;
     private String eventId;
     private LocalDate postedDate;
+    private LocalDate effectiveDate;
+    private LocalDate transactionDate;
     @Nullable
     private String description;
     @Nullable
@@ -38,4 +40,6 @@ public class DraftJournalEntry {
     @Nullable
     private UUID reversalOfId;
     private List<DraftJournalLine> lines;
+    @Builder.Default
+    private boolean autoReverse = false;
 }

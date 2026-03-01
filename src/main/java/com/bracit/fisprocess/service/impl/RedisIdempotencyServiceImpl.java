@@ -4,11 +4,13 @@ import com.bracit.fisprocess.domain.entity.IdempotencyLog;
 import com.bracit.fisprocess.domain.enums.IdempotencyStatus;
 import com.bracit.fisprocess.repository.IdempotencyLogRepository;
 import com.bracit.fisprocess.service.IdempotencyService;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -33,6 +35,7 @@ public class RedisIdempotencyServiceImpl implements IdempotencyService {
     private final StringRedisTemplate redisTemplate;
     private final IdempotencyLogRepository idempotencyLogRepository;
     private final JsonMapper jsonMapper;
+    private final @Qualifier("redisIdempotencyCircuitBreaker") CircuitBreaker redisIdempotencyCircuitBreaker;
 
     @Override
     @Transactional
@@ -150,7 +153,8 @@ public class RedisIdempotencyServiceImpl implements IdempotencyService {
 
         for (int attempt = 1; attempt <= REDIS_RETRY_MAX_ATTEMPTS; attempt++) {
             try {
-                return operation.get();
+                Supplier<T> guarded = CircuitBreaker.decorateSupplier(redisIdempotencyCircuitBreaker, operation);
+                return guarded.get();
             } catch (RuntimeException ex) {
                 lastError = ex;
                 if (attempt == REDIS_RETRY_MAX_ATTEMPTS) {

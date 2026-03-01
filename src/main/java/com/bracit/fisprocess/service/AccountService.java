@@ -66,5 +66,16 @@ public interface AccountService {
         return updateAccount(tenantId, accountCode, request, "system");
     }
 
-    AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request, String performedBy);
+    AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request,
+            String performedBy);
+
+    /**
+     * Retrieves an account with its aggregated balance (sum of self + all
+     * descendant balances using recursive hierarchy traversal).
+     *
+     * @param tenantId    the tenant UUID
+     * @param accountCode the account code
+     * @return the account response with aggregatedBalanceCents populated
+     */
+    AccountResponseDto getAggregatedBalance(UUID tenantId, String accountCode);
 }

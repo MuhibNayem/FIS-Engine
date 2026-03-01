@@ -12,6 +12,7 @@ import com.bracit.fisprocess.exception.OverlappingAccountingPeriodException;
 import com.bracit.fisprocess.repository.AccountingPeriodRepository;
 import com.bracit.fisprocess.service.AccountingPeriodService;
 import com.bracit.fisprocess.service.AuditService;
+import com.bracit.fisprocess.service.AutoReversalService;
 import com.bracit.fisprocess.service.PeriodEndRevaluationService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -30,6 +31,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
 
     private final AccountingPeriodRepository accountingPeriodRepository;
     private final AuditService auditService;
+    private final AutoReversalService autoReversalService;
     private final PeriodEndRevaluationService periodEndRevaluationService;
 
     @Value("${fis.revaluation.reserve-account-code:FX_REVAL_RESERVE}")
@@ -42,7 +44,8 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     @Override
     @Transactional
     public AccountingPeriodResponseDto createPeriod(UUID tenantId, CreateAccountingPeriodRequestDto request) {
-        if (!accountingPeriodRepository.findOverlapping(tenantId, request.getStartDate(), request.getEndDate()).isEmpty()) {
+        if (!accountingPeriodRepository.findOverlapping(tenantId, request.getStartDate(), request.getEndDate())
+                .isEmpty()) {
             throw new OverlappingAccountingPeriodException();
         }
         AccountingPeriod created = accountingPeriodRepository.save(AccountingPeriod.builder()
@@ -70,12 +73,14 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     @Override
     @Transactional(readOnly = true)
     public List<AccountingPeriodResponseDto> listPeriods(UUID tenantId, @Nullable PeriodStatus status) {
-        return accountingPeriodRepository.listByTenantAndStatus(tenantId, status).stream().map(this::toResponse).toList();
+        return accountingPeriodRepository.listByTenantAndStatus(tenantId, status).stream().map(this::toResponse)
+                .toList();
     }
 
     @Override
     @Transactional
-    public AccountingPeriodResponseDto changeStatus(UUID tenantId, UUID periodId, PeriodStatus targetStatus, String changedBy) {
+    public AccountingPeriodResponseDto changeStatus(UUID tenantId, UUID periodId, PeriodStatus targetStatus,
+            String changedBy) {
         AccountingPeriod period = accountingPeriodRepository.findById(periodId)
                 .filter(p -> p.getTenantId().equals(tenantId))
                 .orElseThrow(() -> new InvalidPeriodTransitionException("Accounting period was not found for tenant."));
@@ -93,6 +98,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
             markClosed(period, changedBy);
         } else if (current == PeriodStatus.SOFT_CLOSED && targetStatus == PeriodStatus.OPEN) {
             reopen(period);
+            autoReversalService.generateReversals(tenantId, periodId, changedBy);
         } else if (current == PeriodStatus.SOFT_CLOSED && targetStatus == PeriodStatus.HARD_CLOSED) {
             enforceSequentialHardClose(tenantId, period);
             periodEndRevaluationService.run(
@@ -110,7 +116,8 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
             enforceCascadingReopen(tenantId, period);
             reopen(period);
         } else {
-            throw new InvalidPeriodTransitionException("Unsupported period transition: " + current + " -> " + targetStatus);
+            throw new InvalidPeriodTransitionException(
+                    "Unsupported period transition: " + current + " -> " + targetStatus);
         }
 
         period.setStatus(targetStatus);
@@ -132,7 +139,8 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
     private void enforceSequentialHardClose(UUID tenantId, AccountingPeriod target) {
         List<AccountingPeriod> ordered = accountingPeriodRepository.findByTenantIdOrderByStartDateAsc(tenantId);
         for (AccountingPeriod period : ordered) {
-            if (period.getStartDate().isBefore(target.getStartDate()) && period.getStatus() != PeriodStatus.HARD_CLOSED) {
+            if (period.getStartDate().isBefore(target.getStartDate())
+                    && period.getStatus() != PeriodStatus.HARD_CLOSED) {
                 throw new InvalidPeriodTransitionException("Prior periods must be HARD_CLOSED first.");
             }
         }

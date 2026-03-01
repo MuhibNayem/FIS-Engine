@@ -32,6 +32,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '409':
           $ref: '#/components/responses/DuplicateIdempotencyKey'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
 
   /journal-entries:
     post:
@@ -57,6 +59,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
 
     get:
       summary: List journal entries
@@ -102,6 +106,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryPage'
+
+  /journal-entries/batch:
+    post:
+      summary: Create manual journal entries in batch
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorRoleHeader'
+        - $ref: '#/components/parameters/TraceparentHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJournalEntryBatchRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryBatchResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          $ref: '#/components/responses/DuplicateIdempotencyKey'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
 
   /journal-entries/{id}:
     get:
@@ -337,6 +370,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/AccountResponse'
 
+  /accounts/{accountCode}/aggregated-balance:
+    get:
+      summary: Get account aggregated balance (self + descendants)
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: accountCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account with aggregated balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /accounting-periods:
     post:
       summary: Create accounting period
@@ -563,6 +616,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RevaluationResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /revaluations/periods/{periodId}/translation:
+    post:
+      summary: Run functional-currency translation (CTA/OCI) for income statement items
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: periodId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunTranslationRequest'
+      responses:
+        '201':
+          description: Translation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
 
   /settlements:
     post:
@@ -582,6 +664,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SettlementResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
 
   /admin/integrity-check:
     get:
@@ -595,6 +679,288 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LedgerIntegrityCheckResponse'
+
+  /admin/year-end-close:
+    post:
+      summary: Perform fiscal year-end close
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/YearEndCloseRequest'
+      responses:
+        '200':
+          description: Year-end close result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YearEndCloseResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /reports/trial-balance:
+    get:
+      summary: Generate trial balance report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: asOfDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Trial balance report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrialBalanceReport'
+
+  /reports/balance-sheet:
+    get:
+      summary: Generate balance sheet report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: asOfDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Balance sheet report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSheetReport'
+
+  /reports/income-statement:
+    get:
+      summary: Generate income statement report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Income statement report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeStatementReport'
+
+  /reports/general-ledger/{accountCode}:
+    get:
+      summary: Generate general ledger detail report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: accountCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: General ledger report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralLedgerReport'
+
+  /reports/cash-flow:
+    get:
+      summary: Generate cash flow report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Cash flow report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashFlowReport'
+
+  /reports/account-activity/{accountCode}:
+    get:
+      summary: Generate account activity report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: accountCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Account activity report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountActivityReport'
+
+  /reports/journal-register:
+    get:
+      summary: Generate journal register report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Journal register report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalRegisterReport'
+
+  /reports/dimension-summary:
+    get:
+      summary: Generate dimension summary report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: dimensionKey
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Dimension summary report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DimensionSummaryReport'
+
+  /reports/fx-exposure:
+    get:
+      summary: Generate FX exposure report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: asOfDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: FX exposure report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxExposureReport'
+
+  /reports/aging:
+    get:
+      summary: Generate aging analysis report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: accountType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ASSET, LIABILITY]
+        - name: asOfDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Aging report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgingReport'
 
 components:
   securitySchemes:
@@ -667,6 +1033,17 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    RateLimitExceeded:
+      description: Too many requests for protected posting endpoints
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Retry window in seconds
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
 
   schemas:
     Problem:
@@ -708,6 +1085,14 @@ components:
         postedDate:
           type: string
           format: date
+        effectiveDate:
+          type: string
+          format: date
+          nullable: true
+        transactionDate:
+          type: string
+          format: date
+          nullable: true
         description:
           type: string
           nullable: true
@@ -718,10 +1103,29 @@ components:
           type: string
         createdBy:
           type: string
+        autoReverse:
+          type: boolean
+          default: false
         lines:
           type: array
           items:
             $ref: '#/components/schemas/JournalLineRequest'
+
+    CreateJournalEntryBatchRequest:
+      type: object
+      required: [batchMode, entries]
+      properties:
+        batchMode:
+          $ref: '#/components/schemas/JournalBatchMode'
+        entries:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CreateJournalEntryRequest'
+
+    JournalBatchMode:
+      type: string
+      enum: [POST_NOW, CREATE_DRAFTS]
 
     JournalEntryResponse:
       type: object
@@ -730,6 +1134,12 @@ components:
           type: string
           format: uuid
         postedDate:
+          type: string
+          format: date
+        effectiveDate:
+          type: string
+          format: date
+        transactionDate:
           type: string
           format: date
         status:
@@ -764,6 +1174,18 @@ components:
           type: integer
           format: int64
           nullable: true
+
+    JournalEntryBatchResponse:
+      type: object
+      properties:
+        batchMode:
+          $ref: '#/components/schemas/JournalBatchMode'
+        count:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntryResponse'
 
     JournalEntryPage:
       type: object
@@ -925,6 +1347,10 @@ components:
           type: boolean
         parentAccountCode:
           type: string
+          nullable: true
+        aggregatedBalanceCents:
+          type: integer
+          format: int64
           nullable: true
         createdAt:
           type: string
@@ -1179,7 +1605,37 @@ components:
         lossAccountCode:
           type: string
 
+    RunTranslationRequest:
+      type: object
+      required: [eventId, createdBy, ctaOciAccountCode, translationReserveAccountCode]
+      properties:
+        eventId:
+          type: string
+        createdBy:
+          type: string
+        ctaOciAccountCode:
+          type: string
+        translationReserveAccountCode:
+          type: string
+
     RevaluationResponse:
+      type: object
+      properties:
+        periodId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        generatedJournalEntryIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    TranslationResponse:
       type: object
       properties:
         periodId:
@@ -1262,3 +1718,441 @@ components:
           format: int64
         balanced:
           type: boolean
+
+    YearEndCloseRequest:
+      type: object
+      required: [fiscalYear, retainedEarningsAccountCode, createdBy]
+      properties:
+        fiscalYear:
+          type: integer
+        retainedEarningsAccountCode:
+          type: string
+        createdBy:
+          type: string
+
+    YearEndCloseResponse:
+      type: object
+      properties:
+        fiscalYear:
+          type: integer
+        closingJournalEntryId:
+          type: string
+          format: uuid
+          nullable: true
+        totalRevenue:
+          type: integer
+          format: int64
+        totalExpenses:
+          type: integer
+          format: int64
+        netIncome:
+          type: integer
+          format: int64
+        accountsClosed:
+          type: integer
+        retainedEarningsAccountCode:
+          type: string
+        message:
+          type: string
+
+    ReportMetadata:
+      type: object
+      properties:
+        reportType:
+          type: string
+        tenantId:
+          type: string
+          format: uuid
+        asOfDate:
+          type: string
+          format: date
+          nullable: true
+        fromDate:
+          type: string
+          format: date
+          nullable: true
+        toDate:
+          type: string
+          format: date
+          nullable: true
+        baseCurrency:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+
+    TrialBalanceLine:
+      type: object
+      properties:
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        accountType:
+          type: string
+        debitBalance:
+          type: integer
+          format: int64
+        creditBalance:
+          type: integer
+          format: int64
+
+    TrialBalanceReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrialBalanceLine'
+        totalDebits:
+          type: integer
+          format: int64
+        totalCredits:
+          type: integer
+          format: int64
+        balanced:
+          type: boolean
+
+    BalanceSheetLine:
+      type: object
+      properties:
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        balanceCents:
+          type: integer
+          format: int64
+        formattedBalance:
+          type: string
+
+    BalanceSheetSection:
+      type: object
+      properties:
+        sectionName:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceSheetLine'
+        sectionTotal:
+          type: integer
+          format: int64
+
+    BalanceSheetReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        assets:
+          $ref: '#/components/schemas/BalanceSheetSection'
+        liabilities:
+          $ref: '#/components/schemas/BalanceSheetSection'
+        equity:
+          $ref: '#/components/schemas/BalanceSheetSection'
+        totalAssets:
+          type: integer
+          format: int64
+        totalLiabilitiesAndEquity:
+          type: integer
+          format: int64
+        balanced:
+          type: boolean
+
+    IncomeStatementLine:
+      type: object
+      properties:
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        amountCents:
+          type: integer
+          format: int64
+        formattedAmount:
+          type: string
+
+    IncomeStatementSection:
+      type: object
+      properties:
+        sectionName:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncomeStatementLine'
+        sectionTotal:
+          type: integer
+          format: int64
+
+    IncomeStatementReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        revenue:
+          $ref: '#/components/schemas/IncomeStatementSection'
+        expenses:
+          $ref: '#/components/schemas/IncomeStatementSection'
+        totalRevenue:
+          type: integer
+          format: int64
+        totalExpenses:
+          type: integer
+          format: int64
+        netIncome:
+          type: integer
+          format: int64
+
+    GeneralLedgerEntry:
+      type: object
+      properties:
+        journalEntryId:
+          type: string
+          format: uuid
+        sequenceNumber:
+          type: integer
+          format: int64
+          nullable: true
+        postedDate:
+          type: string
+          format: date
+        description:
+          type: string
+        debitAmount:
+          type: integer
+          format: int64
+        creditAmount:
+          type: integer
+          format: int64
+        runningBalance:
+          type: integer
+          format: int64
+
+    GeneralLedgerReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        openingBalance:
+          type: integer
+          format: int64
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneralLedgerEntry'
+        closingBalance:
+          type: integer
+          format: int64
+
+    CashFlowLine:
+      type: object
+      properties:
+        label:
+          type: string
+        amountCents:
+          type: integer
+          format: int64
+
+    CashFlowSection:
+      type: object
+      properties:
+        sectionName:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashFlowLine'
+        sectionTotal:
+          type: integer
+          format: int64
+
+    CashFlowReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        operatingActivities:
+          $ref: '#/components/schemas/CashFlowSection'
+        investingActivities:
+          $ref: '#/components/schemas/CashFlowSection'
+        financingActivities:
+          $ref: '#/components/schemas/CashFlowSection'
+        netCashChange:
+          type: integer
+          format: int64
+        openingCash:
+          type: integer
+          format: int64
+        closingCash:
+          type: integer
+          format: int64
+
+    AccountActivityReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        accountCode:
+          type: string
+        accountName:
+          type: string
+        openingBalance:
+          type: integer
+          format: int64
+        totalDebits:
+          type: integer
+          format: int64
+        totalCredits:
+          type: integer
+          format: int64
+        closingBalance:
+          type: integer
+          format: int64
+        transactionCount:
+          type: integer
+          format: int64
+
+    JournalRegisterEntry:
+      type: object
+      properties:
+        journalEntryId:
+          type: string
+          format: uuid
+        sequenceNumber:
+          type: integer
+          format: int64
+          nullable: true
+        postedDate:
+          type: string
+          format: date
+        description:
+          type: string
+        status:
+          type: string
+        totalDebits:
+          type: integer
+          format: int64
+        totalCredits:
+          type: integer
+          format: int64
+        createdBy:
+          type: string
+
+    JournalRegisterReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalRegisterEntry'
+        totalEntries:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        size:
+          type: integer
+        totalPages:
+          type: integer
+          format: int64
+
+    DimensionSummaryLine:
+      type: object
+      properties:
+        dimensionValue:
+          type: string
+        debitTotal:
+          type: integer
+          format: int64
+        creditTotal:
+          type: integer
+          format: int64
+        netAmount:
+          type: integer
+          format: int64
+
+    DimensionSummaryReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        dimensionKey:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/DimensionSummaryLine'
+        grandTotal:
+          type: integer
+          format: int64
+
+    FxExposureLine:
+      type: object
+      properties:
+        currency:
+          type: string
+        assetExposure:
+          type: integer
+          format: int64
+        liabilityExposure:
+          type: integer
+          format: int64
+        netExposure:
+          type: integer
+          format: int64
+        currentRate:
+          type: number
+        unrealizedGainLoss:
+          type: integer
+          format: int64
+
+    FxExposureReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        baseCurrency:
+          type: string
+        exposures:
+          type: array
+          items:
+            $ref: '#/components/schemas/FxExposureLine'
+        totalUnrealizedGainLoss:
+          type: integer
+          format: int64
+
+    AgingBucket:
+      type: object
+      properties:
+        bucketLabel:
+          type: string
+        amountCents:
+          type: integer
+          format: int64
+        entryCount:
+          type: integer
+          format: int64
+
+    AgingReport:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/ReportMetadata'
+        accountType:
+          type: string
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgingBucket'
+        grandTotal:
+          type: integer
+          format: int64

@@ -8,6 +8,11 @@ spring:
     username: ${DB_USERNAME:sa}
     password: ${DB_PASSWORD:}
     driver-class-name: ${DB_DRIVER:org.h2.Driver}
+    hikari:
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:5000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT_MS:3000}
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
 
   # --- JPA / Hibernate ---
   jpa:
@@ -17,6 +22,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          timeout: ${DB_QUERY_TIMEOUT_SECONDS:5}
 
   # --- Flyway ---
   flyway:
@@ -34,6 +41,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
 
   # --- RabbitMQ ---
   rabbitmq:
@@ -41,10 +50,14 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    connection-timeout: ${RABBITMQ_CONNECTION_TIMEOUT_MS:5000}
+    requested-heartbeat: ${RABBITMQ_REQUESTED_HEARTBEAT:30s}
     publisher-confirm-type: correlated
     publisher-returns: true
     template:
       mandatory: true
+      receive-timeout: ${RABBITMQ_TEMPLATE_RECEIVE_TIMEOUT_MS:3000}
+      reply-timeout: ${RABBITMQ_TEMPLATE_REPLY_TIMEOUT_MS:5000}
     listener:
       simple:
         acknowledge-mode: manual
@@ -52,6 +65,8 @@ spring:
         prefetch: ${RABBITMQ_PREFETCH:50}
         concurrency: ${RABBITMQ_CONSUMER_CONCURRENCY:3}
         max-concurrency: ${RABBITMQ_CONSUMER_MAX_CONCURRENCY:12}
+  lifecycle:
+    timeout-per-shutdown-phase: ${GRACEFUL_SHUTDOWN_TIMEOUT:30s}
 
 fis:
   approval:
@@ -60,21 +75,55 @@ fis:
     check-delay-ms: ${FIS_INTEGRITY_CHECK_DELAY_MS:3600000}
   outbox:
     relay-delay-ms: ${FIS_OUTBOX_RELAY_DELAY_MS:1000}
+    retention-days: ${FIS_OUTBOX_RETENTION_DAYS:30}
+    alert:
+      retry-streak-threshold: ${FIS_OUTBOX_ALERT_RETRY_STREAK_THRESHOLD:5}
+      oldest-unpublished-seconds: ${FIS_OUTBOX_ALERT_OLDEST_UNPUBLISHED_SECONDS:300}
   revaluation:
     reserve-account-code: ${FIS_REVAL_RESERVE_ACCOUNT:FX_REVAL_RESERVE}
     gain-account-code: ${FIS_REVAL_GAIN_ACCOUNT:FX_UNREALIZED_GAIN}
     loss-account-code: ${FIS_REVAL_LOSS_ACCOUNT:FX_UNREALIZED_LOSS}
   security:
-    enabled: ${FIS_SECURITY_ENABLED:false}
+    enabled: ${FIS_SECURITY_ENABLED:true}
+    allow-insecure-mode: ${FIS_SECURITY_ALLOW_INSECURE_MODE:false}
+    cors:
+      allowed-origins: ${FIS_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
     jwt:
       public-key-pem: ${FIS_JWT_PUBLIC_KEY_PEM:}
+      enforce-tenant-claim: ${FIS_JWT_ENFORCE_TENANT_CLAIM:true}
+      tenant-claim-name: ${FIS_JWT_TENANT_CLAIM_NAME:tenant_id}
+  resilience:
+    circuit-breaker:
+      sliding-window-size: ${FIS_CB_SLIDING_WINDOW_SIZE:20}
+      minimum-number-of-calls: ${FIS_CB_MIN_CALLS:10}
+      failure-rate-threshold: ${FIS_CB_FAILURE_RATE_THRESHOLD:50}
+      wait-duration-open-seconds: ${FIS_CB_WAIT_OPEN_SECONDS:15}
+  rate-limit:
+    enabled: ${FIS_RATE_LIMIT_ENABLED:false}
+    window-seconds: ${FIS_RATE_LIMIT_WINDOW_SECONDS:1}
+    requests-per-window: ${FIS_RATE_LIMIT_REQUESTS_PER_WINDOW:60}
+    fail-open: ${FIS_RATE_LIMIT_FAIL_OPEN:true}
 
 # --- Actuator ---
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
+  tracing:
+    sampling:
+      probability: ${OTEL_TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+    metrics:
+      export:
+        enabled: ${OTEL_EXPORTER_OTLP_METRICS_ENABLED:false}
+        url: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+  metrics:
+    export:
+      prometheus:
+        enabled: ${MANAGEMENT_PROMETHEUS_ENABLED:true}
   endpoint:
     health:
       show-details: always
@@ -83,6 +132,7 @@ management:
 
 server:
   forward-headers-strategy: framework
+  shutdown: graceful
 
 ---
 # ========================
@@ -101,6 +151,11 @@ spring:
     properties:
       hibernate:
         show_sql: true
+
+fis:
+  security:
+    enabled: ${FIS_SECURITY_ENABLED:false}
+    allow-insecure-mode: ${FIS_SECURITY_ALLOW_INSECURE_MODE:true}
 
 ---
 # ========================
@@ -124,6 +179,11 @@ spring:
     console:
       enabled: false
 
+fis:
+  security:
+    enabled: ${FIS_SECURITY_ENABLED:false}
+    allow-insecure-mode: ${FIS_SECURITY_ALLOW_INSECURE_MODE:true}
+
 ---
 # ========================
 # Profile: prod
@@ -132,10 +192,6 @@ spring:
   config:
     activate:
       on-profile: prod
-
-fis:
-  security:
-    enabled: ${FIS_SECURITY_ENABLED:true}
 
   datasource:
     url: ${DB_URL}
@@ -159,6 +215,12 @@ fis:
     redis:
       ssl:
         enabled: ${REDIS_SSL_ENABLED:true}
+
+fis:
+  rate-limit:
+    enabled: ${FIS_RATE_LIMIT_ENABLED:true}
+  security:
+    enabled: ${FIS_SECURITY_ENABLED:true}
 server:
   ssl:
     enabled: ${SERVER_SSL_ENABLED:true}

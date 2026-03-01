@@ -266,7 +266,7 @@ The FIS Engine has **zero knowledge** of the business logic of upstream services
 | ID | Requirement | Priority |
 | :---- | :---- | :---- |
 | FR-09 | The system SHALL expose REST APIs for synchronous Journal Entry intake and RabbitMQ consumers for asynchronous event processing. | Critical |
-| FR-09a | The system SHALL expose a **batch posting** endpoint (`POST /v1/journal-entries/batch`) that accepts multiple JEs and persists them atomically — all succeed or all fail. | High |
+| FR-09a | The system SHALL expose a **batch posting** endpoint (`POST /v1/journal-entries/batch`) that accepts multiple JEs and persists them atomically — all succeed or all fail. The request SHALL include explicit `batchMode` (`POST_NOW` or `CREATE_DRAFTS`) and enforce a single deterministic behavior for the full batch. | High |
 | FR-10 | The system SHALL validate that the sum of all Debits equals the sum of all Credits in a given Journal Entry, with **at least one debit AND at least one credit line**, before persisting. Any violation SHALL be rejected. | Critical |
 | FR-10a | The system SHALL support a **JE Approval Workflow** with the following states: `DRAFT → PENDING_APPROVAL → POSTED` and `DRAFT → PENDING_APPROVAL → REJECTED`. `DRAFT` entries SHALL NOT update account balances or the hash chain. | Critical |
 | FR-10b | The system SHALL enforce **maker-checker separation**: the approver (`approved_by`) MUST be a different user than the creator (`created_by`). Self-approval SHALL be rejected. | Critical |
@@ -421,8 +421,9 @@ The complete DDL is defined in REF-04. The following tables are provisioned via 
 | V15 | `fis_audit_log` \+ `fis_revaluation_run` | Immutable admin audit trail and revaluation idempotency tracking |
 | V16 | `fis_ledger` | Multi-Ledger (N CoAs) — independent CoA/JE/hash per ledger per tenant |
 | V17 | ALTER `fis_account`, `fis_journal_entry`, `fis_mapping_rule` | Add `ledger_id` FK, update unique constraints, backfill default ledger |
-| V18 | ALTER `fis_journal_entry` | Add `sequence_number`, `approved_by`, `approved_at`, `auto_reverse` columns. Update status CHECK constraint to include `DRAFT`, `PENDING_APPROVAL`, `REJECTED` |
-| V19 | ALTER `fis_account` | Add `is_contra BOOLEAN DEFAULT FALSE` column |
+| V18 | ALTER `fis_account` | Add `is_contra BOOLEAN DEFAULT FALSE` column |
+| V19 | ALTER `fis_journal_entry` | Add `auto_reverse BOOLEAN NOT NULL DEFAULT FALSE` column and index for auto-reversal lookup |
+| V22 | `fis_period_translation_run` | Period-level functional-currency translation run tracking and idempotency |
 
 Historical note: migration numbers `V3`, `V4`, `V8`, and `V9` are intentionally unused in the current chain.
 
@@ -480,11 +481,12 @@ New endpoints added in v2.0:
 | IR-32 | `/v1/reports/trial-balance` | GET | Generate Trial Balance report |
 | IR-33 | `/v1/reports/balance-sheet` | GET | Generate Balance Sheet report |
 | IR-34 | `/v1/reports/income-statement` | GET | Generate Income Statement report |
-| IR-35 | `/v1/reports/general-ledger/{code}` | GET | Generate General Ledger Detail |
+| IR-35 | `/v1/reports/general-ledger/{accountCode}` | GET | Generate General Ledger Detail |
 | IR-36 | `/v1/admin/integrity-check` | GET | Verify accounting equation integrity |
 | IR-37 | `/v1/admin/year-end-close` | POST | Execute fiscal year-end close |
-| IR-38 | `/v1/accounts/{code}/aggregated-balance` | GET | Get aggregated balance including children |
+| IR-38 | `/v1/accounts/{accountCode}/aggregated-balance` | GET | Get aggregated balance including children |
 | IR-39 | `/v1/settlements` | POST | Record FX settlement with realized gain/loss |
+| IR-40 | `/v1/revaluations/periods/{periodId}/translation` | POST | Run functional-currency translation and post CTA/OCI adjustment |
 
 Complete request/response schemas are defined in REF-05.
 
@@ -616,7 +618,7 @@ Every incoming financial event traverses the following ordered pipeline:
 | 1 | `EventIntakeService` | Receives REST payload or RabbitMQ message. Extracts headers. |
 | 2 | `IdempotencyService` | Redis `SET NX EX`. Rejects duplicates. Returns cached response if exists. |
 | 3 | `RuleMappingService` | Loads mapping rule by `eventType`. Uses ModelMapper to produce `DraftJournalEntry`. |
-| 4 | `PeriodValidationService` | Checks if the target `postedDate` falls within an `OPEN` Accounting Period. |
+| 4 | `PeriodValidationService` | Checks if the target `effectiveDate` (defaulting to `postedDate`) falls within an `OPEN` Accounting Period. |
 | 5 | `JournalEntryValidationService` | Validates `Sum(Debits) == Sum(Credits)`. Validates account codes exist and are active. |
 | 6 | `MultiCurrencyService` | Applies exchange rate, computes base-currency amounts for each Journal Line. |
 | 7 | `LedgerLockingService` | Acquires `SELECT ... FOR UPDATE` on target account rows. |

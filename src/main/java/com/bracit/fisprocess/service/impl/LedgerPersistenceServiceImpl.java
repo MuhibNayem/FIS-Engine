@@ -8,9 +8,7 @@ import com.bracit.fisprocess.domain.enums.JournalStatus;
 import com.bracit.fisprocess.domain.model.DraftJournalEntry;
 import com.bracit.fisprocess.domain.model.DraftJournalLine;
 import com.bracit.fisprocess.exception.AccountNotFoundException;
-import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.AccountRepository;
-import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import com.bracit.fisprocess.repository.JournalSequenceRepository;
 import com.bracit.fisprocess.service.HashChainService;
@@ -39,141 +37,142 @@ import java.util.UUID;
 @Slf4j
 public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
 
-    private final JournalEntryRepository journalEntryRepository;
-    private final AccountRepository accountRepository;
-    private final BusinessEntityRepository businessEntityRepository;
-    private final JournalSequenceRepository journalSequenceRepository;
-    private final HashChainService hashChainService;
-    private final LedgerLockingService ledgerLockingService;
-    private final MeterRegistry meterRegistry;
+        private final JournalEntryRepository journalEntryRepository;
+        private final AccountRepository accountRepository;
+        private final JournalSequenceRepository journalSequenceRepository;
+        private final HashChainService hashChainService;
+        private final LedgerLockingService ledgerLockingService;
+        private final MeterRegistry meterRegistry;
 
-    @Override
-    @Transactional
-    public JournalEntry persist(DraftJournalEntry draft) {
-        long lockWaitStartNanos = System.nanoTime();
-        // Serialize hash-chain sequencing at tenant granularity.
-        businessEntityRepository.findByTenantIdForUpdate(draft.getTenantId())
-                .orElseThrow(() -> new TenantNotFoundException(draft.getTenantId().toString()));
-        long lockWaitNanos = System.nanoTime() - lockWaitStartNanos;
-        meterRegistry.timer("fis.hash.chain.lock.wait").record(lockWaitNanos, TimeUnit.NANOSECONDS);
-        log.debug("Acquired tenant hash lock for tenant '{}' in {} ms",
-                draft.getTenantId(), lockWaitNanos / 1_000_000.0);
+        @Override
+        @Transactional
+        public JournalEntry persist(DraftJournalEntry draft) {
+                long lockWaitStartNanos = System.nanoTime();
+                // Serialize sequence + hash-chain writes on tenant/fiscal-year key.
+                int fiscalYear = draft.getPostedDate().getYear();
+                long sequenceNumber = allocateSequenceNumber(draft.getTenantId(), fiscalYear);
+                long lockWaitNanos = System.nanoTime() - lockWaitStartNanos;
+                meterRegistry.timer("fis.hash.chain.lock.wait").record(lockWaitNanos, TimeUnit.NANOSECONDS);
+                meterRegistry.timer("fis.hash.chain.sequence.lock.wait").record(lockWaitNanos, TimeUnit.NANOSECONDS);
+                log.debug("Acquired fiscal-year sequence lock for tenant='{}', fiscalYear='{}' in {} ms",
+                                draft.getTenantId(), fiscalYear, lockWaitNanos / 1_000_000.0);
 
-        // 1. Get the previous hash for chain continuity
-        String previousHash = hashChainService.getLatestHash(draft.getTenantId());
+                // 1. Get the previous hash for fiscal-year chain continuity.
+                String previousHash = hashChainService.getLatestHash(draft.getTenantId(), fiscalYear);
 
-        // Precompute immutable identity fields so the row is insert-only.
-        UUID journalEntryId = UUID.randomUUID();
-        OffsetDateTime createdAt = OffsetDateTime.now();
-        String hash = hashChainService.computeHash(journalEntryId, previousHash, createdAt);
+                // Precompute immutable identity fields so the row is insert-only.
+                UUID journalEntryId = UUID.randomUUID();
+                OffsetDateTime createdAt = OffsetDateTime.now();
+                String hash = hashChainService.computeHash(journalEntryId, previousHash, createdAt);
 
-        // 2. Build the JournalEntry entity
-        int fiscalYear = draft.getPostedDate().getYear();
-        long sequenceNumber = allocateSequenceNumber(draft.getTenantId(), fiscalYear);
-        JournalEntry journalEntry = JournalEntry.builder()
-                .id(journalEntryId)
-                .tenantId(draft.getTenantId())
-                .eventId(draft.getEventId())
-                .postedDate(draft.getPostedDate())
-                .description(draft.getDescription())
-                .referenceId(draft.getReferenceId())
-                .status(draft.getReversalOfId() != null ? JournalStatus.REVERSAL : JournalStatus.POSTED)
-                .reversalOfId(draft.getReversalOfId())
-                .transactionCurrency(draft.getTransactionCurrency())
-                .baseCurrency(draft.getBaseCurrency())
-                .exchangeRate(draft.getExchangeRate())
-                .createdBy(draft.getCreatedBy())
-                .createdAt(createdAt)
-                .previousHash(previousHash)
-                .hash(hash)
-                .fiscalYear(fiscalYear)
-                .sequenceNumber(sequenceNumber)
-                .build();
+                // 2. Build the JournalEntry entity
+                JournalEntry journalEntry = JournalEntry.builder()
+                                .id(journalEntryId)
+                                .tenantId(draft.getTenantId())
+                                .eventId(draft.getEventId())
+                                .postedDate(draft.getPostedDate())
+                                .effectiveDate(draft.getEffectiveDate())
+                                .transactionDate(draft.getTransactionDate())
+                                .description(draft.getDescription())
+                                .referenceId(draft.getReferenceId())
+                                .status(draft.getReversalOfId() != null ? JournalStatus.REVERSAL : JournalStatus.POSTED)
+                                .reversalOfId(draft.getReversalOfId())
+                                .transactionCurrency(draft.getTransactionCurrency())
+                                .baseCurrency(draft.getBaseCurrency())
+                                .exchangeRate(draft.getExchangeRate())
+                                .createdBy(draft.getCreatedBy())
+                                .createdAt(createdAt)
+                                .previousHash(previousHash)
+                                .hash(hash)
+                                .fiscalYear(fiscalYear)
+                                .sequenceNumber(sequenceNumber)
+                                .autoReverse(draft.isAutoReverse())
+                                .build();
 
-        // 3. Add journal lines
-        for (DraftJournalLine draftLine : draft.getLines()) {
-            Account account = accountRepository
-                    .findByTenantIdAndCode(draft.getTenantId(), draftLine.getAccountCode())
-                    .orElseThrow(() -> new AccountNotFoundException(draftLine.getAccountCode()));
+                // 3. Add journal lines
+                for (DraftJournalLine draftLine : draft.getLines()) {
+                        Account account = accountRepository
+                                        .findByTenantIdAndCode(draft.getTenantId(), draftLine.getAccountCode())
+                                        .orElseThrow(() -> new AccountNotFoundException(draftLine.getAccountCode()));
 
-            JournalLine line = JournalLine.builder()
-                    .account(account)
-                    .amount(draftLine.getAmountCents())
-                    .baseAmount(draftLine.getBaseAmountCents() != null
-                            ? draftLine.getBaseAmountCents()
-                            : draftLine.getAmountCents())
-                    .isCredit(draftLine.isCredit())
-                    .dimensions(draftLine.getDimensions())
-                    .build();
+                        JournalLine line = JournalLine.builder()
+                                        .account(account)
+                                        .amount(draftLine.getAmountCents())
+                                        .baseAmount(draftLine.getBaseAmountCents() != null
+                                                        ? draftLine.getBaseAmountCents()
+                                                        : draftLine.getAmountCents())
+                                        .isCredit(draftLine.isCredit())
+                                        .dimensions(draftLine.getDimensions())
+                                        .build();
 
-            journalEntry.addLine(line);
+                        journalEntry.addLine(line);
+                }
+
+                // 4. Persist immutably (no follow-up UPDATE on ledger row)
+                journalEntry = journalEntryRepository.save(journalEntry);
+
+                // 5. Update account balances with deterministic lock ordering
+                updateAccountBalances(draft);
+
+                log.info("Persisted JournalEntry '{}' for tenant '{}' with {} lines",
+                                journalEntry.getId(), draft.getTenantId(), draft.getLines().size());
+
+                return journalEntry;
         }
 
-        // 4. Persist immutably (no follow-up UPDATE on ledger row)
-        journalEntry = journalEntryRepository.save(journalEntry);
-
-        // 5. Update account balances with deterministic lock ordering
-        updateAccountBalances(draft);
-
-        log.info("Persisted JournalEntry '{}' for tenant '{}' with {} lines",
-                journalEntry.getId(), draft.getTenantId(), draft.getLines().size());
-
-        return journalEntry;
-    }
-
-    private long allocateSequenceNumber(UUID tenantId, int fiscalYear) {
-        var sequence = journalSequenceRepository.findForUpdate(tenantId, fiscalYear)
-                .orElseGet(() -> journalSequenceRepository.save(
-                        com.bracit.fisprocess.domain.entity.JournalSequence.builder()
-                                .id(new com.bracit.fisprocess.domain.entity.JournalSequenceId(tenantId, fiscalYear))
-                                .nextValue(1L)
-                                .build()));
-        long allocated = sequence.getNextValue();
-        sequence.setNextValue(allocated + 1);
-        journalSequenceRepository.save(sequence);
-        return allocated;
-    }
-
-    /**
-     * Updates account balances with deterministic lock ordering (sorted by account
-     * code)
-     * to prevent deadlocks under concurrent multi-account postings.
-     */
-    private void updateAccountBalances(DraftJournalEntry draft) {
-        // Sort lines by account code for deterministic lock ordering
-        List<DraftJournalLine> sortedLines = draft.getLines().stream()
-                .sorted(Comparator.comparing(DraftJournalLine::getAccountCode))
-                .toList();
-
-        for (DraftJournalLine line : sortedLines) {
-            Account account = accountRepository
-                    .findByTenantIdAndCode(draft.getTenantId(), line.getAccountCode())
-                    .orElseThrow(() -> new AccountNotFoundException(line.getAccountCode()));
-
-            long delta = computeBalanceDelta(account.getAccountType(), account.isContra(), line.getAmountCents(), line.isCredit());
-            ledgerLockingService.updateAccountBalance(account.getAccountId(), delta);
-        }
-    }
-
-    /**
-     * Computes the balance delta based on account type and debit/credit direction.
-     * <p>
-     * Normal balances:
-     * <ul>
-     * <li>ASSET, EXPENSE: Debit increases, Credit decreases</li>
-     * <li>LIABILITY, EQUITY, REVENUE: Credit increases, Debit decreases</li>
-     * </ul>
-     */
-    private long computeBalanceDelta(AccountType accountType, boolean isContra, long amount, boolean isCredit) {
-        boolean isNormalDebit = accountType == AccountType.ASSET || accountType == AccountType.EXPENSE;
-        if (isContra) {
-            isNormalDebit = !isNormalDebit;
+        private long allocateSequenceNumber(UUID tenantId, int fiscalYear) {
+                journalSequenceRepository.initializeIfAbsent(tenantId, fiscalYear);
+                var sequence = journalSequenceRepository.findForUpdate(tenantId, fiscalYear)
+                                .orElseThrow(() -> new IllegalStateException(
+                                                "Journal sequence missing for tenant=%s fiscalYear=%d"
+                                                                .formatted(tenantId, fiscalYear)));
+                long allocated = sequence.getNextValue();
+                sequence.setNextValue(allocated + 1);
+                journalSequenceRepository.save(sequence);
+                return allocated;
         }
 
-        if (isNormalDebit) {
-            return isCredit ? -amount : amount;
-        } else {
-            return isCredit ? amount : -amount;
+        /**
+         * Updates account balances with deterministic lock ordering (sorted by account
+         * code)
+         * to prevent deadlocks under concurrent multi-account postings.
+         */
+        private void updateAccountBalances(DraftJournalEntry draft) {
+                // Sort lines by account code for deterministic lock ordering
+                List<DraftJournalLine> sortedLines = draft.getLines().stream()
+                                .sorted(Comparator.comparing(DraftJournalLine::getAccountCode))
+                                .toList();
+
+                for (DraftJournalLine line : sortedLines) {
+                        Account account = accountRepository
+                                        .findByTenantIdAndCode(draft.getTenantId(), line.getAccountCode())
+                                        .orElseThrow(() -> new AccountNotFoundException(line.getAccountCode()));
+
+                        long delta = computeBalanceDelta(account.getAccountType(), account.isContra(),
+                                        line.getAmountCents(), line.isCredit());
+                        ledgerLockingService.updateAccountBalance(account.getAccountId(), delta);
+                }
         }
-    }
+
+        /**
+         * Computes the balance delta based on account type and debit/credit direction.
+         * <p>
+         * Normal balances:
+         * <ul>
+         * <li>ASSET, EXPENSE: Debit increases, Credit decreases</li>
+         * <li>LIABILITY, EQUITY, REVENUE: Credit increases, Debit decreases</li>
+         * </ul>
+         */
+        private long computeBalanceDelta(AccountType accountType, boolean isContra, long amount, boolean isCredit) {
+                boolean isNormalDebit = accountType == AccountType.ASSET || accountType == AccountType.EXPENSE;
+                if (isContra) {
+                        isNormalDebit = !isNormalDebit;
+                }
+
+                if (isNormalDebit) {
+                        return isCredit ? -amount : amount;
+                } else {
+                        return isCredit ? amount : -amount;
+                }
+        }
 }

@@ -73,6 +73,8 @@ public class JournalReversalServiceImpl implements JournalReversalService {
                 .tenantId(tenantId)
                 .eventId(request.getEventId())
                 .postedDate(original.getPostedDate())
+                .effectiveDate(original.getEffectiveDate())
+                .transactionDate(original.getTransactionDate())
                 .description("Reversal of " + original.getId() + ": " + request.getReason())
                 .referenceId(original.getReferenceId())
                 .transactionCurrency(original.getTransactionCurrency())

@@ -24,6 +24,7 @@ import com.bracit.fisprocess.repository.JournalWorkflowRepository;
 import com.bracit.fisprocess.service.JournalWorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,8 @@ public class JournalWorkflowServiceImpl implements JournalWorkflowService {
                 .tenantId(tenantId)
                 .eventId(request.getEventId())
                 .postedDate(request.getPostedDate())
+                .effectiveDate(request.getEffectiveDate() != null ? request.getEffectiveDate() : request.getPostedDate())
+                .transactionDate(request.getTransactionDate() != null ? request.getTransactionDate() : request.getPostedDate())
                 .description(request.getDescription())
                 .referenceId(request.getReferenceId())
                 .transactionCurrency(request.getTransactionCurrency())
@@ -78,11 +81,24 @@ public class JournalWorkflowServiceImpl implements JournalWorkflowService {
                     .build());
         }
 
-        JournalWorkflow saved = journalWorkflowRepository.save(workflow);
+        JournalWorkflow saved;
+        try {
+            saved = journalWorkflowRepository.save(workflow);
+        } catch (DataIntegrityViolationException ex) {
+            String message = ex.getMostSpecificCause() != null
+                    ? ex.getMostSpecificCause().getMessage()
+                    : ex.getMessage();
+            if (message != null && message.toLowerCase().contains("event_id")) {
+                throw new DuplicateIdempotencyKeyException(request.getEventId());
+            }
+            throw ex;
+        }
 
         return JournalEntryResponseDto.builder()
                 .journalEntryId(saved.getWorkflowId())
                 .postedDate(saved.getPostedDate())
+                .effectiveDate(saved.getEffectiveDate())
+                .transactionDate(saved.getTransactionDate())
                 .status(JournalStatus.DRAFT)
                 .description(saved.getDescription())
                 .referenceId(saved.getReferenceId())
@@ -139,6 +155,8 @@ public class JournalWorkflowServiceImpl implements JournalWorkflowService {
                 .tenantId(tenantId)
                 .eventId(workflow.getEventId())
                 .postedDate(workflow.getPostedDate())
+                .effectiveDate(workflow.getEffectiveDate())
+                .transactionDate(workflow.getTransactionDate())
                 .description(workflow.getDescription())
                 .referenceId(workflow.getReferenceId())
                 .transactionCurrency(workflow.getTransactionCurrency())

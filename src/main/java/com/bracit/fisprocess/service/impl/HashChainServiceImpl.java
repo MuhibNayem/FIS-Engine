@@ -41,4 +41,11 @@ public class HashChainServiceImpl implements HashChainService {
                 .map(je -> je.getHash())
                 .orElse(GENESIS_HASH);
     }
+
+    @Override
+    public String getLatestHash(UUID tenantId, int fiscalYear) {
+        return journalEntryRepository.findTopByTenantIdAndFiscalYearOrderBySequenceNumberDesc(tenantId, fiscalYear)
+                .map(je -> je.getHash())
+                .orElse(GENESIS_HASH);
+    }
 }

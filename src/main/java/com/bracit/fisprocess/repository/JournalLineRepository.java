@@ -36,4 +36,24 @@ public interface JournalLineRepository extends JpaRepository<JournalLine, UUID> 
             @Param("tenantId") UUID tenantId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
+
+    @Query(value = """
+            SELECT
+                je.transaction_currency AS transactionCurrency,
+                COALESCE(SUM(CASE WHEN jl.is_credit THEN -jl.amount ELSE jl.amount END), 0) AS signedAmountCents,
+                COALESCE(SUM(CASE WHEN jl.is_credit THEN -jl.base_amount ELSE jl.base_amount END), 0) AS signedBaseAmountCents
+            FROM fis_journal_entry je
+            JOIN fis_journal_line jl ON jl.journal_entry_id = je.journal_entry_id
+            JOIN fis_account a ON a.account_id = jl.account_id
+            WHERE je.tenant_id = :tenantId
+              AND COALESCE(je.effective_date, je.posted_date) BETWEEN :startDate AND :endDate
+              AND je.status IN ('POSTED', 'CORRECTION')
+              AND je.transaction_currency <> je.base_currency
+              AND a.account_type IN ('REVENUE', 'EXPENSE')
+            GROUP BY je.transaction_currency
+            """, nativeQuery = true)
+    List<IncomeStatementExposureView> aggregateIncomeStatementExposureByCurrency(
+            @Param("tenantId") UUID tenantId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
 }

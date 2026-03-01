@@ -38,7 +38,7 @@ public class JournalPostingEngine {
             @Nullable String traceparent) {
         periodValidationService.validatePostingAllowed(
                 tenantId,
-                draft.getPostedDate(),
+                draft.getEffectiveDate(),
                 actorRoleResolver.resolve(actorRoleHeader));
 
         DraftJournalEntry converted = multiCurrencyService.apply(draft);

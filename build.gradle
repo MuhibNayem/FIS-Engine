@@ -3,6 +3,8 @@ plugins {
     id 'org.springframework.boot' version '4.0.3'
     id 'io.spring.dependency-management' version '1.1.7'
     id "io.freefair.lombok" version "9.2.0"
+    id 'jacoco'
+    id 'info.solidsoft.pitest' version '1.19.0-rc.2'
 }
 
 group = 'com.bracit'
@@ -35,6 +37,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-micrometer:2.2.0'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-registry-otlp'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.security:spring-security-core'
@@ -73,6 +79,7 @@ dependencies {
     testImplementation 'org.testcontainers:rabbitmq'
     testImplementation 'com.redis:testcontainers-redis:2.2.4'
     testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.pitest:pitest-junit5-plugin:1.2.2'
 }
 
 tasks.named('test') {
@@ -86,4 +93,67 @@ tasks.named('test') {
         environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', dockerSocketPath
         environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
     }
+}
+
+jacoco {
+    toolVersion = "0.8.13"
+}
+
+tasks.named('test') {
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+tasks.named('jacocoTestReport') {
+    dependsOn tasks.named('test')
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    dependsOn tasks.named('test')
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.35
+            }
+        }
+        rule {
+            element = 'PACKAGE'
+            includes = ['com.bracit.fisprocess.service.impl*']
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.40
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('jacocoTestCoverageVerification')
+}
+
+pitest {
+    junit5PluginVersion = '1.2.2'
+    targetClasses = [
+            'com.bracit.fisprocess.service.impl.PeriodEndRevaluationServiceImpl',
+            'com.bracit.fisprocess.service.impl.FunctionalCurrencyTranslationServiceImpl',
+            'com.bracit.fisprocess.service.impl.OutboxServiceImpl'
+    ]
+    targetTests = [
+            'com.bracit.fisprocess.service.impl.*Test',
+            'com.bracit.fisprocess.service.*Test'
+    ]
+    mutators = ['STRONGER']
+    threads = 2
+    outputFormats = ['HTML', 'XML']
+    timestampedReports = false
+    mutationThreshold = 35
+    failWhenNoMutations = true
 }

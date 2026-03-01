@@ -16,4 +16,11 @@ public interface ExchangeRateService {
             UUID tenantId, String sourceCurrency, String targetCurrency, @Nullable LocalDate effectiveDate);
 
     BigDecimal resolveRate(UUID tenantId, String sourceCurrency, String targetCurrency, LocalDate effectiveDate);
+
+    BigDecimal resolveAverageRate(
+            UUID tenantId,
+            String sourceCurrency,
+            String targetCurrency,
+            LocalDate fromDate,
+            LocalDate toDate);
 }

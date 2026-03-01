@@ -94,6 +94,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
+     * Handles argument validation errors thrown from service-layer guards.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatusCode.valueOf(400),
+                ex.getMessage() == null ? "Invalid request." : ex.getMessage());
+        problemDetail.setType(URI.create("/problems/validation-failed"));
+        problemDetail.setTitle("Validation Failed");
+        return ResponseEntity.badRequest().body(problemDetail);
+    }
+
+    /**
      * Catch-all handler for unexpected exceptions.
      */
     @ExceptionHandler(Exception.class)

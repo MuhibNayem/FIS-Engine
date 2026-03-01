@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -84,6 +85,27 @@ class AccountingPeriodCurrencyIntegrationTest extends AbstractIntegrationTest {
                 .name("Revenue EUR")
                 .accountType(AccountType.REVENUE)
                 .currencyCode("EUR")
+                .build());
+        accountRepository.save(Account.builder()
+                .tenantId(tenantId)
+                .code("FX_REVAL_RESERVE")
+                .name("FX Revaluation Reserve")
+                .accountType(AccountType.ASSET)
+                .currencyCode("USD")
+                .build());
+        accountRepository.save(Account.builder()
+                .tenantId(tenantId)
+                .code("FX_UNREALIZED_GAIN")
+                .name("FX Unrealized Gain")
+                .accountType(AccountType.REVENUE)
+                .currencyCode("USD")
+                .build());
+        accountRepository.save(Account.builder()
+                .tenantId(tenantId)
+                .code("FX_UNREALIZED_LOSS")
+                .name("FX Unrealized Loss")
+                .accountType(AccountType.EXPENSE)
+                .currencyCode("USD")
                 .build());
     }
 
@@ -212,6 +234,59 @@ class AccountingPeriodCurrencyIntegrationTest extends AbstractIntegrationTest {
                 .content(jsonMapper.writeValueAsString(journalRequest("EVT-CURR-MISMATCH", "USD", "CASH-EUR", "REV-EUR"))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.type").value("/problems/account-currency-mismatch"));
+    }
+
+    @Test
+    void shouldRunFunctionalCurrencyTranslationAndPostCtaJournal() throws Exception {
+        accountRepository.save(Account.builder()
+                .tenantId(tenantId)
+                .code("CTA-OCI")
+                .name("CTA OCI")
+                .accountType(AccountType.EQUITY)
+                .currencyCode("USD")
+                .build());
+        accountRepository.save(Account.builder()
+                .tenantId(tenantId)
+                .code("TRANS-RESERVE")
+                .name("Translation Reserve")
+                .accountType(AccountType.EQUITY)
+                .currencyCode("USD")
+                .build());
+
+        String periodId = createPeriod("2026-02", "2026-02-01", "2026-02-28");
+        mockMvc.perform(post("/v1/exchange-rates")
+                .header("X-Tenant-Id", tenantId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"rates":[
+                          {"sourceCurrency":"EUR","targetCurrency":"USD","rate":1.5,"effectiveDate":"2026-02-10"},
+                          {"sourceCurrency":"EUR","targetCurrency":"USD","rate":1.1,"effectiveDate":"2026-02-25"}
+                        ]}
+                        """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/v1/journal-entries")
+                .header("X-Tenant-Id", tenantId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(journalRequest("EVT-TRANS-SOURCE", "EUR", "CASH-EUR", "REV-EUR"))))
+                .andExpect(status().isCreated());
+
+        transition(periodId, "SOFT_CLOSED", 200);
+
+        mockMvc.perform(post("/v1/revaluations/periods/{periodId}/translation", periodId)
+                .header("X-Tenant-Id", tenantId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "eventId":"EVT-TRANS-RUN",
+                          "createdBy":"phase4-test",
+                          "ctaOciAccountCode":"CTA-OCI",
+                          "translationReserveAccountCode":"TRANS-RESERVE"
+                        }
+                        """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.generatedJournalEntryIds", hasSize(1)));
     }
 
     private String createPeriod(String name, String startDate, String endDate) throws Exception {

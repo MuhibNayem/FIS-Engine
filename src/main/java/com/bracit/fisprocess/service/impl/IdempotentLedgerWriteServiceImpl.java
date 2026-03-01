@@ -26,7 +26,8 @@ public class IdempotentLedgerWriteServiceImpl implements IdempotentLedgerWriteSe
             String eventId,
             Object payload,
             Class<T> responseType,
-            Supplier<T> writeOperation) {
+            Supplier<T> writeOperation,
+            boolean allowProcessingRetry) {
         String payloadHash = payloadHashService.sha256Hex(payload);
         IdempotencyService.IdempotencyCheckResult check =
                 idempotencyService.checkAndMarkProcessing(tenantId, eventId, payloadHash);
@@ -39,7 +40,9 @@ public class IdempotentLedgerWriteServiceImpl implements IdempotentLedgerWriteSe
             if (check.cachedResponse() != null && !check.cachedResponse().isBlank() && !"{}".equals(check.cachedResponse())) {
                 return jsonMapper.readValue(check.cachedResponse(), responseType);
             }
-            throw new DuplicateIdempotencyKeyException(eventId);
+            if (!allowProcessingRetry) {
+                throw new DuplicateIdempotencyKeyException(eventId);
+            }
         }
 
         try {

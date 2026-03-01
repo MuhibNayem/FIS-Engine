@@ -29,6 +29,12 @@ public class CreateJournalEntryRequestDto {
     private LocalDate postedDate;
 
     @Nullable
+    private LocalDate effectiveDate;
+
+    @Nullable
+    private LocalDate transactionDate;
+
+    @Nullable
     private String description;
 
     @Nullable
@@ -43,4 +49,7 @@ public class CreateJournalEntryRequestDto {
     @NotEmpty(message = "At least one journal line is required")
     @Valid
     private List<JournalLineRequestDto> lines;
+
+    @Builder.Default
+    private boolean autoReverse = false;
 }

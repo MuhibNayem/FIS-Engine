@@ -7,5 +7,6 @@ public enum AuditEntityType {
     ACCOUNT,
     ACCOUNTING_PERIOD,
     MAPPING_RULE,
-    REVALUATION
+    REVALUATION,
+    TRANSLATION
 }

@@ -44,6 +44,29 @@ Required:
 - `RABBITMQ_PASSWORD`
 - `FIS_SECURITY_ENABLED=true`
 - `FIS_JWT_PUBLIC_KEY_PEM` (required; RSA public key in PEM format)
+- `FIS_JWT_ENFORCE_TENANT_CLAIM=true`
+- `FIS_JWT_TENANT_CLAIM_NAME=tenant_id`
+- `FIS_CORS_ALLOWED_ORIGINS=https://your-app.example.com`
+- `FIS_OUTBOX_RETENTION_DAYS=30`
+- `FIS_OUTBOX_ALERT_RETRY_STREAK_THRESHOLD=5`
+- `FIS_OUTBOX_ALERT_OLDEST_UNPUBLISHED_SECONDS=300`
+- `FIS_CB_SLIDING_WINDOW_SIZE=20`
+- `FIS_CB_MIN_CALLS=10`
+- `FIS_CB_FAILURE_RATE_THRESHOLD=50`
+- `FIS_CB_WAIT_OPEN_SECONDS=15`
+- `FIS_RATE_LIMIT_ENABLED=true` (prod recommended)
+- `FIS_RATE_LIMIT_WINDOW_SECONDS=1`
+- `FIS_RATE_LIMIT_REQUESTS_PER_WINDOW=60`
+- `FIS_RATE_LIMIT_FAIL_OPEN=true`
+- `DB_CONNECTION_TIMEOUT_MS=5000`
+- `DB_QUERY_TIMEOUT_SECONDS=5`
+- `REDIS_CONNECT_TIMEOUT=2s`
+- `REDIS_TIMEOUT=2s`
+- `RABBITMQ_CONNECTION_TIMEOUT_MS=5000`
+- `RABBITMQ_TEMPLATE_REPLY_TIMEOUT_MS=5000`
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4318/v1/traces`
+- `OTEL_EXPORTER_OTLP_METRICS_ENABLED=true`
+- `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://otel-collector:4318/v1/metrics`
 
 Recommended production hardening:
 - `SERVER_SSL_ENABLED=true`
@@ -80,6 +103,10 @@ Post-deploy validation:
 3. Confirm RabbitMQ exchanges/queues present.
 4. Confirm JWT auth works for admin and accountant roles.
 5. Confirm health endpoints report `UP`.
+6. If `FIS_SECURITY_ENABLED=false` (non-prod only), confirm startup log contains `SECURITY_MODE=INSECURE`.
+7. If `FIS_SECURITY_ENABLED=false` (non-prod only), confirm metric markers:
+   - `fis.security.insecure.mode=1`
+   - counter `fis.security.mode.startup{mode="insecure"}`
 
 ## 9. Shutdown Checklist
 1. Stop ingress traffic (drain/load balancer).
@@ -102,6 +129,17 @@ Track:
 - Queue depth (`fis.ingestion.queue`, DLQ)
 - Idempotency conflict rates
 - DB pool saturation and lock wait times
+- Outbox publish metrics:
+  - `fis.outbox.publish.success.count`
+  - `fis.outbox.publish.failure.count`
+  - `fis.outbox.retry.streak`
+  - `fis.outbox.oldest.unpublished.age.seconds`
+  - `fis.outbox.unpublished.backlog`
+- Circuit breaker metrics:
+  - `resilience4j.circuitbreaker.calls`
+  - `resilience4j.circuitbreaker.state`
+- Prometheus scrape endpoint:
+  - `/actuator/prometheus`
 
 ## 11. Security Operations
 - Auth mode: JWT bearer tokens
@@ -110,6 +148,7 @@ Track:
   - `FIS_ACCOUNTANT`: posting/reversal/correction
   - `FIS_READER`: read-only
 - Mandatory tenant header: `X-Tenant-Id`
+- Tenant/JWT binding: `X-Tenant-Id` must equal JWT tenant claim (`tenant_id` by default).
 
 Token/secret rotation:
 1. Rotate signing key pair in IdP/KMS.
@@ -161,6 +200,8 @@ Token/secret rotation:
 2. Inspect DLQ and poison-message patterns.
 3. Scale consumers and tune prefetch if needed.
 4. Confirm ack-after-commit behavior remains intact.
+5. If `fis.outbox.retry.streak >= 5` or
+   `fis.outbox.oldest.unpublished.age.seconds >= 300`, trigger incident escalation and inspect broker connectivity/publisher errors.
 
 ### 13.4 Redis Unavailable
 1. Expect idempotency degradation risk.

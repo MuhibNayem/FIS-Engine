@@ -55,6 +55,8 @@ public class RuleMappingServiceImpl implements RuleMappingService {
                 .tenantId(tenantId)
                 .eventId(event.getEventId())
                 .postedDate(event.getPostedDate())
+                .effectiveDate(event.getPostedDate())
+                .transactionDate(event.getPostedDate())
                 .description(event.getDescription())
                 .referenceId(event.getReferenceId())
                 .transactionCurrency(event.getTransactionCurrency())

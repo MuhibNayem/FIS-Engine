@@ -60,6 +60,12 @@ public class JournalEntry implements Persistable<UUID> {
     @Column(name = "posted_date", nullable = false)
     private LocalDate postedDate;
 
+    @Column(name = "effective_date", nullable = false)
+    private LocalDate effectiveDate;
+
+    @Column(name = "transaction_date", nullable = false)
+    private LocalDate transactionDate;
+
     @Nullable
     private String description;
 
@@ -102,6 +108,10 @@ public class JournalEntry implements Persistable<UUID> {
 
     @Column(name = "sequence_number", nullable = false)
     private Long sequenceNumber;
+
+    @Column(name = "auto_reverse", nullable = false)
+    @Builder.Default
+    private boolean autoReverse = false;
 
     @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

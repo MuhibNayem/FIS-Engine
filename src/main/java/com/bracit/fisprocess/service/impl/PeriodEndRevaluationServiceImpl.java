@@ -79,11 +79,12 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
                 .build());
 
         try {
-            List<UUID> generated = executeRevaluation(tenantId, period, request);
+            RevaluationExecutionResult execution = executeRevaluation(tenantId, period, request);
 
             Map<String, Object> details = new LinkedHashMap<>();
-            details.put("generatedJournalEntryIds", generated);
-            details.put("generatedCount", generated.size());
+            details.put("generatedJournalEntryIds", execution.generatedJournalEntryIds());
+            details.put("generatedCount", execution.generatedJournalEntryIds().size());
+            details.put("currencySnapshots", execution.currencySnapshots());
 
             run.setStatus(RevaluationRunStatus.COMPLETED);
             run.setCompletedAt(OffsetDateTime.now());
@@ -103,7 +104,7 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
                     .periodId(periodId)
                     .runId(run.getId())
                     .status(run.getStatus().name())
-                    .generatedJournalEntryIds(generated)
+                    .generatedJournalEntryIds(execution.generatedJournalEntryIds())
                     .build();
         } catch (RuntimeException ex) {
             run.setStatus(RevaluationRunStatus.FAILED);
@@ -114,36 +115,40 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
         }
     }
 
-    private List<UUID> executeRevaluation(UUID tenantId, AccountingPeriod period, RunRevaluationRequestDto request) {
+    private RevaluationExecutionResult executeRevaluation(UUID tenantId, AccountingPeriod period, RunRevaluationRequestDto request) {
         List<JournalExposureView> exposure = journalLineRepository.aggregateExposureByCurrency(
                 tenantId, period.getStartDate(), period.getEndDate());
         List<UUID> generated = new ArrayList<>();
+        List<Map<String, Object>> snapshots = new ArrayList<>();
+
+        String reserveCode = request.getReserveAccountCode();
+        String gainCode = request.getGainAccountCode();
+        String lossCode = request.getLossAccountCode();
+        validateAccountExists(tenantId, reserveCode);
+        validateAccountExists(tenantId, gainCode);
+        validateAccountExists(tenantId, lossCode);
+        String baseCurrency = resolveBaseCurrency(tenantId, reserveCode);
 
         for (JournalExposureView row : exposure) {
             String txCurrency = row.getTransactionCurrency();
             long netAmountCents = row.getSignedAmountCents();
             long carryingBaseCents = row.getSignedBaseAmountCents();
             if (netAmountCents == 0L) {
+                snapshots.add(snapshot(txCurrency, null, 0L, carryingBaseCents, 0L, 0L, null));
                 continue;
             }
 
             BigDecimal closingRate = exchangeRateService.resolveRate(
-                    tenantId, txCurrency, resolveBaseCurrency(tenantId, request.getReserveAccountCode()), period.getEndDate());
+                    tenantId, txCurrency, baseCurrency, period.getEndDate());
             long closingBaseCents = BigDecimal.valueOf(netAmountCents)
                     .multiply(closingRate)
                     .setScale(0, RoundingMode.HALF_UP)
                     .longValue();
             long deltaCents = closingBaseCents - carryingBaseCents;
             if (deltaCents == 0L) {
+                snapshots.add(snapshot(txCurrency, closingRate, netAmountCents, carryingBaseCents, closingBaseCents, 0L, null));
                 continue;
             }
-
-            String reserveCode = request.getReserveAccountCode();
-            String gainCode = request.getGainAccountCode();
-            String lossCode = request.getLossAccountCode();
-            validateAccountExists(tenantId, reserveCode);
-            validateAccountExists(tenantId, gainCode);
-            validateAccountExists(tenantId, lossCode);
 
             boolean gain = deltaCents > 0;
             long amount = Math.abs(deltaCents);
@@ -156,7 +161,7 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
                             .postedDate(period.getEndDate())
                             .description("Period-end revaluation for " + txCurrency + " during " + period.getName())
                             .referenceId("REVAL-" + period.getName() + "-" + txCurrency)
-                            .transactionCurrency(resolveBaseCurrency(tenantId, reserveCode))
+                            .transactionCurrency(baseCurrency)
                             .createdBy(request.getCreatedBy())
                             .lines(List.of(
                                     JournalLineRequestDto.builder()
@@ -172,9 +177,17 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
                             .build(),
                     "FIS_ADMIN");
             generated.add(posted.getJournalEntryId());
+            snapshots.add(snapshot(
+                    txCurrency,
+                    closingRate,
+                    netAmountCents,
+                    carryingBaseCents,
+                    closingBaseCents,
+                    deltaCents,
+                    posted.getJournalEntryId()));
         }
 
-        return generated;
+        return new RevaluationExecutionResult(generated, snapshots);
     }
 
     private String resolveBaseCurrency(UUID tenantId, String anyAccountCode) {
@@ -208,5 +221,24 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
                 .status(run.getStatus().name())
                 .generatedJournalEntryIds(ids)
                 .build();
+    }
+
+    private static Map<String, Object> snapshot(String currency, BigDecimal closingRate, long signedAmountCents,
+            long carryingBaseCents, long translatedBaseCents, long deltaCents, UUID postedJournalEntryId) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("currency", currency);
+        snapshot.put("rateType", "CLOSING");
+        snapshot.put("rateUsed", closingRate);
+        snapshot.put("signedAmountCents", signedAmountCents);
+        snapshot.put("carryingBaseCents", carryingBaseCents);
+        snapshot.put("translatedBaseCents", translatedBaseCents);
+        snapshot.put("deltaCents", deltaCents);
+        snapshot.put("postedJournalEntryId", postedJournalEntryId);
+        return snapshot;
+    }
+
+    private record RevaluationExecutionResult(
+            List<UUID> generatedJournalEntryIds,
+            List<Map<String, Object>> currencySnapshots) {
     }
 }

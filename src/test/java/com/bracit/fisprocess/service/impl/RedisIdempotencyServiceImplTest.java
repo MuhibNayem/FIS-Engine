@@ -4,11 +4,13 @@ import com.bracit.fisprocess.domain.entity.IdempotencyLog;
 import com.bracit.fisprocess.domain.enums.IdempotencyStatus;
 import com.bracit.fisprocess.repository.IdempotencyLogRepository;
 import com.bracit.fisprocess.service.IdempotencyService;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -38,8 +40,24 @@ class RedisIdempotencyServiceImplTest {
     @Mock
     private JsonMapper jsonMapper;
 
-    @InjectMocks
     private RedisIdempotencyServiceImpl service;
+    private CircuitBreaker circuitBreaker;
+
+    @BeforeEach
+    void setUp() {
+        circuitBreaker = CircuitBreaker.of(
+                "redisIdempotencyTest",
+                CircuitBreakerConfig.custom()
+                        .slidingWindowSize(10)
+                        .minimumNumberOfCalls(10)
+                        .failureRateThreshold(50)
+                        .build());
+        service = new RedisIdempotencyServiceImpl(
+                redisTemplate,
+                idempotencyLogRepository,
+                jsonMapper,
+                circuitBreaker);
+    }
 
     @Test
     @DisplayName("checkAndMarkProcessing should use PostgreSQL fallback when Redis is unavailable")

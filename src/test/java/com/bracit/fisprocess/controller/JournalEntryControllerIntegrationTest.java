@@ -5,7 +5,9 @@ import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.AccountingPeriod;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.enums.AccountType;
+import com.bracit.fisprocess.domain.enums.JournalBatchMode;
 import com.bracit.fisprocess.domain.enums.PeriodStatus;
+import com.bracit.fisprocess.dto.request.CreateJournalEntryBatchRequestDto;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryRequestDto;
 import com.bracit.fisprocess.dto.request.JournalLineRequestDto;
 import com.bracit.fisprocess.repository.AccountRepository;
@@ -29,7 +31,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -253,6 +257,31 @@ class JournalEntryControllerIntegrationTest extends AbstractIntegrationTest {
                 }
 
                 @Test
+                @DisplayName("should validate accounting period by effectiveDate")
+                void shouldValidatePeriodUsingEffectiveDate() throws Exception {
+                        String eventId = "EVT-EFF-" + UUID.randomUUID().toString().substring(0, 8);
+                        CreateJournalEntryRequestDto base = balancedRequest(eventId);
+                        CreateJournalEntryRequestDto request = CreateJournalEntryRequestDto.builder()
+                                        .eventId(base.getEventId())
+                                        .postedDate(base.getPostedDate())
+                                        .effectiveDate(LocalDate.of(2026, 3, 1))
+                                        .transactionDate(LocalDate.of(2026, 2, 20))
+                                        .description(base.getDescription())
+                                        .referenceId(base.getReferenceId())
+                                        .transactionCurrency(base.getTransactionCurrency())
+                                        .createdBy(base.getCreatedBy())
+                                        .lines(base.getLines())
+                                        .build();
+
+                        mockMvc.perform(post("/v1/journal-entries")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(request)))
+                                        .andExpect(status().isUnprocessableEntity())
+                                        .andExpect(jsonPath("$.type", is("/problems/accounting-period-not-found")));
+                }
+
+                @Test
                 @DisplayName("should return 400 for missing required fields")
                 void shouldReturn400ForMissingFields() throws Exception {
                         mockMvc.perform(post("/v1/journal-entries")
@@ -295,6 +324,69 @@ class JournalEntryControllerIntegrationTest extends AbstractIntegrationTest {
                                         .header("X-Tenant-Id", tenantId.toString()))
                                         .andExpect(status().isOk())
                                         .andExpect(jsonPath("$.currentBalanceCents", is(10000)));
+                }
+        }
+
+        @Nested
+        @DisplayName("POST /v1/journal-entries/batch")
+        class BatchCreateJournalEntryTests {
+
+                @Test
+                @DisplayName("should create all entries atomically for POST_NOW mode")
+                void shouldCreateBatchPostNow() throws Exception {
+                        String eventId1 = "EVT-BATCH-1-" + UUID.randomUUID().toString().substring(0, 8);
+                        String eventId2 = "EVT-BATCH-2-" + UUID.randomUUID().toString().substring(0, 8);
+
+                        CreateJournalEntryBatchRequestDto batchRequest = CreateJournalEntryBatchRequestDto.builder()
+                                        .batchMode(JournalBatchMode.POST_NOW)
+                                        .entries(List.of(
+                                                        balancedRequest(eventId1),
+                                                        expenseRequest(eventId2)))
+                                        .build();
+
+                        mockMvc.perform(post("/v1/journal-entries/batch")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(batchRequest)))
+                                        .andExpect(status().isCreated())
+                                        .andExpect(jsonPath("$.batchMode", is("POST_NOW")))
+                                        .andExpect(jsonPath("$.count", is(2)))
+                                        .andExpect(jsonPath("$.entries", hasSize(2)))
+                                        .andExpect(jsonPath("$.entries[0].status", is("POSTED")))
+                                        .andExpect(jsonPath("$.entries[1].status", is("POSTED")));
+
+                        assertEquals(1L, journalCountByEventId(eventId1));
+                        assertEquals(1L, journalCountByEventId(eventId2));
+                }
+
+                @Test
+                @DisplayName("should reject entire batch on duplicate eventId in same batch")
+                void shouldRejectBatchOnDuplicateEventId() throws Exception {
+                        String duplicateEventId = "EVT-BATCH-DUP-" + UUID.randomUUID().toString().substring(0, 8);
+                        CreateJournalEntryBatchRequestDto batchRequest = CreateJournalEntryBatchRequestDto.builder()
+                                        .batchMode(JournalBatchMode.POST_NOW)
+                                        .entries(List.of(
+                                                        balancedRequest(duplicateEventId),
+                                                        expenseRequest(duplicateEventId)))
+                                        .build();
+
+                        mockMvc.perform(post("/v1/journal-entries/batch")
+                                        .header("X-Tenant-Id", tenantId.toString())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(toJson(batchRequest)))
+                                        .andExpect(status().isConflict())
+                                        .andExpect(jsonPath("$.type", is("/problems/duplicate-idempotency-key")));
+
+                        assertEquals(0L, journalCountByEventId(duplicateEventId));
+                }
+
+                private long journalCountByEventId(String eventId) {
+                        Long count = jdbcTemplate.queryForObject(
+                                        "SELECT COUNT(*) FROM fis_journal_entry WHERE tenant_id = ? AND event_id = ?",
+                                        Long.class,
+                                        tenantId,
+                                        eventId);
+                        return count == null ? 0L : count;
                 }
         }
 

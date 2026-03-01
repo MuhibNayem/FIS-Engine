@@ -1,7 +1,10 @@
 package com.bracit.fisprocess.controller;
 
 import com.bracit.fisprocess.dto.request.RunRevaluationRequestDto;
+import com.bracit.fisprocess.dto.request.RunTranslationRequestDto;
 import com.bracit.fisprocess.dto.response.RevaluationResponseDto;
+import com.bracit.fisprocess.dto.response.TranslationResponseDto;
+import com.bracit.fisprocess.service.FunctionalCurrencyTranslationService;
 import com.bracit.fisprocess.service.PeriodEndRevaluationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,7 @@ import java.util.UUID;
 public class RevaluationController {
 
     private final PeriodEndRevaluationService periodEndRevaluationService;
+    private final FunctionalCurrencyTranslationService functionalCurrencyTranslationService;
 
     @PostMapping("/periods/{periodId}")
     public ResponseEntity<RevaluationResponseDto> run(
@@ -29,5 +33,14 @@ public class RevaluationController {
             @PathVariable UUID periodId,
             @Valid @RequestBody RunRevaluationRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(periodEndRevaluationService.run(tenantId, periodId, request));
+    }
+
+    @PostMapping("/periods/{periodId}/translation")
+    public ResponseEntity<TranslationResponseDto> runTranslation(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @PathVariable UUID periodId,
+            @Valid @RequestBody RunTranslationRequestDto request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(functionalCurrencyTranslationService.run(tenantId, periodId, request));
     }
 }

@@ -5,8 +5,10 @@ import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.AccountingPeriod;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.enums.AccountType;
+import com.bracit.fisprocess.domain.enums.JournalBatchMode;
 import com.bracit.fisprocess.domain.enums.JournalWorkflowStatus;
 import com.bracit.fisprocess.domain.enums.PeriodStatus;
+import com.bracit.fisprocess.dto.request.CreateJournalEntryBatchRequestDto;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryRequestDto;
 import com.bracit.fisprocess.dto.request.JournalLineRequestDto;
 import com.bracit.fisprocess.repository.AccountRepository;
@@ -31,6 +33,7 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -159,5 +162,49 @@ class JournalApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.status", is("POSTED")))
                 .andExpect(jsonPath("$.sequenceNumber", greaterThan(0)))
                 .andExpect(jsonPath("$.fiscalYear", is(2026)));
+    }
+
+    @Test
+    void shouldRejectPostNowBatchWhenAnyEntryRequiresApproval() throws Exception {
+        String eventIdSmall = "EVT-BATCH-SMALL-" + UUID.randomUUID().toString().substring(0, 8);
+        String eventIdLarge = "EVT-BATCH-LARGE-" + UUID.randomUUID().toString().substring(0, 8);
+
+        CreateJournalEntryRequestDto smallEntry = CreateJournalEntryRequestDto.builder()
+                .eventId(eventIdSmall)
+                .postedDate(LocalDate.of(2026, 2, 25))
+                .description("Below threshold")
+                .transactionCurrency("USD")
+                .createdBy("maker-user")
+                .lines(List.of(
+                        JournalLineRequestDto.builder().accountCode("CASH").amountCents(5_000L).isCredit(false).build(),
+                        JournalLineRequestDto.builder().accountCode("REVENUE").amountCents(5_000L).isCredit(true).build()))
+                .build();
+        CreateJournalEntryRequestDto largeEntry = CreateJournalEntryRequestDto.builder()
+                .eventId(eventIdLarge)
+                .postedDate(LocalDate.of(2026, 2, 25))
+                .description("Above threshold")
+                .transactionCurrency("USD")
+                .createdBy("maker-user")
+                .lines(List.of(
+                        JournalLineRequestDto.builder().accountCode("CASH").amountCents(50_000L).isCredit(false).build(),
+                        JournalLineRequestDto.builder().accountCode("REVENUE").amountCents(50_000L).isCredit(true).build()))
+                .build();
+
+        CreateJournalEntryBatchRequestDto request = CreateJournalEntryBatchRequestDto.builder()
+                .batchMode(JournalBatchMode.POST_NOW)
+                .entries(List.of(smallEntry, largeEntry))
+                .build();
+
+        mockMvc.perform(post("/v1/journal-entries/batch")
+                        .header("X-Tenant-Id", tenantId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type", is("/problems/approval-violation")));
+
+        assertFalse(journalEntryRepository.existsByTenantIdAndEventId(tenantId, eventIdSmall));
+        assertFalse(journalEntryRepository.existsByTenantIdAndEventId(tenantId, eventIdLarge));
+        assertFalse(journalWorkflowRepository.existsByTenantIdAndEventId(tenantId, eventIdSmall));
+        assertFalse(journalWorkflowRepository.existsByTenantIdAndEventId(tenantId, eventIdLarge));
     }
 }

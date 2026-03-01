@@ -3,14 +3,38 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FIS API Docs</title>
+  <title>FIS Process API Reference (v1)</title>
+  <meta
+    name="description"
+    content="Interactive API reference for the current FIS Process development build."
+  />
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
   <style>
-    body { margin: 0; background: #f6f8fb; }
-    #swagger-ui { max-width: 1200px; margin: 0 auto; }
+    body { margin: 0; background: #f6f8fb; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .api-doc-header {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px 20px 8px;
+      color: #1b2733;
+    }
+    .api-doc-header h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.3;
+    }
+    .api-doc-header p {
+      margin: 6px 0 0;
+      color: #4f6374;
+      font-size: 14px;
+    }
+    #swagger-ui { max-width: 1200px; margin: 0 auto 24px; }
   </style>
 </head>
 <body>
+  <div class="api-doc-header">
+    <h1>FIS Process API Reference</h1>
+    <p>Source: <code>/openapi.yaml</code> • Environment: current development workspace</p>
+  </div>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
@@ -20,7 +44,8 @@
       deepLinking: true,
       displayRequestDuration: true,
       persistAuthorization: true,
-      docExpansion: 'list'
+      docExpansion: 'list',
+      validatorUrl: null
     });
   </script>
 </body>
