@@ -79,6 +79,7 @@ Processing pipeline:
 - `docs/06-messaging-topology.md` - RabbitMQ + Redis design.
 - `docs/07-domain-models.md` - Entities/DTOs/service contracts.
 - `docs/08-implementation-roadmap.md` - Phased implementation plan.
+- `docs/12-plug-and-play-adoption-guide.md` - Fast integration guide for consuming projects.
 - `deploy/k8s/` - Kubernetes manifests (deployment/service/config/secret/HPA).
 - `deploy/otel/` - OpenTelemetry Collector config.
 - `performance/k6/` - Load/stress test scripts.

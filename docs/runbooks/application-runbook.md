@@ -260,4 +260,5 @@ For any production change:
 - `docs/SRS.md`
 - `docs/05-api-contracts.md`
 - `docs/08-implementation-roadmap.md`
+- `docs/12-plug-and-play-adoption-guide.md`
 - `docs/runbooks/phase6-operations-runbook.md`
