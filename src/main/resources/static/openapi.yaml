@@ -1790,10 +1790,24 @@ components:
           type: string
         accountType:
           type: string
+        parentAccountCode:
+          type: string
+          nullable: true
+        hierarchyLevel:
+          type: integer
+          format: int32
+        leaf:
+          type: boolean
         debitBalance:
           type: integer
           format: int64
         creditBalance:
+          type: integer
+          format: int64
+        rolledUpDebitBalance:
+          type: integer
+          format: int64
+        rolledUpCreditBalance:
           type: integer
           format: int64
 
@@ -1822,10 +1836,23 @@ components:
           type: string
         accountName:
           type: string
+        parentAccountCode:
+          type: string
+          nullable: true
+        hierarchyLevel:
+          type: integer
+          format: int32
+        leaf:
+          type: boolean
         balanceCents:
           type: integer
           format: int64
+        rolledUpBalanceCents:
+          type: integer
+          format: int64
         formattedBalance:
+          type: string
+        formattedRolledUpBalance:
           type: string
 
     BalanceSheetSection:
@@ -1868,10 +1895,23 @@ components:
           type: string
         accountName:
           type: string
+        parentAccountCode:
+          type: string
+          nullable: true
+        hierarchyLevel:
+          type: integer
+          format: int32
+        leaf:
+          type: boolean
         amountCents:
           type: integer
           format: int64
+        rolledUpAmountCents:
+          type: integer
+          format: int64
         formattedAmount:
+          type: string
+        formattedRolledUpAmount:
           type: string
 
     IncomeStatementSection:

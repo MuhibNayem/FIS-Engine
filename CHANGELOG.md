@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-03-02
+
+### Reporting hierarchy expansion
+- Extended Trial Balance, Balance Sheet, and Income Statement line outputs with hierarchy metadata (`parentAccountCode`, `hierarchyLevel`, `leaf`) and rolled-up analysis fields.
+- Updated statement tree rendering to include full allowed-type CoA hierarchy while preserving own-value totals for accounting invariants.
+- Synced static OpenAPI schemas with the new reporting line fields.
+
+### Documentation synchronization and version alignment
+- Updated documentation status/version metadata to reflect current implementation state.
+- Corrected stale phase/gap completion markers in `docs/10-audit-remediation-plan.md`.
+- Added current closure-status addendum in `docs/finance-accounting-gap-analysis.md`.
+- Clarified hierarchy-aware reporting contract notes in `docs/05-api-contracts.md`.
+
 ## 2026-02-26
 
 ### Audit remediation completion (R1-R8)

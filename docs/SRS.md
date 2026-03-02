@@ -7,8 +7,8 @@
 | Field | Value |
 | :---- | :---- |
 | **Document Title** | Software Requirements Specification — Generic FIS Engine |
-| **Version** | 2.0 |
-| **Date** | February 26, 2026 |
+| **Version** | 2.1 |
+| **Date** | March 2, 2026 |
 | **Prepared By** | Engineering Division |
 | **Standard** | IEEE 830-1998 / ISO/IEC/IEEE 29148:2018 |
 | **Classification** | Confidential — Internal Use Only |
@@ -21,6 +21,7 @@
 | :---- | :---- | :---- | :---- |
 | 1.0 | 2026-02-25 | Engineering Division | Initial SRS baseline |
 | 2.0 | 2026-02-26 | Engineering Division | Added: Multi-Ledger (N CoAs), JE approval workflow, sequential numbering, contra accounts, financial reporting APIs, year-end close, auto-reversing entries, batch posting, realized FX gains/losses, rounding handling, equation integrity check. Corrected: NFR-17 `@Data` policy, JWT asymmetric key requirement. |
+| 2.1 | 2026-03-02 | Engineering Division | Documentation synchronization: reporting hierarchy/roll-up output semantics clarified and cross-document status/version alignment updated. |
 
 ---
 

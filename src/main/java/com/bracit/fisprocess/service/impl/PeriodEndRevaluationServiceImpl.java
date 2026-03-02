@@ -2,6 +2,7 @@ package com.bracit.fisprocess.service.impl;
 
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.AccountingPeriod;
+import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.entity.PeriodRevaluationRun;
 import com.bracit.fisprocess.domain.enums.AuditAction;
 import com.bracit.fisprocess.domain.enums.AuditEntityType;
@@ -15,8 +16,10 @@ import com.bracit.fisprocess.dto.response.RevaluationResponseDto;
 import com.bracit.fisprocess.exception.AccountingPeriodNotFoundException;
 import com.bracit.fisprocess.exception.RevaluationAlreadyRunException;
 import com.bracit.fisprocess.exception.RevaluationConfigurationException;
+import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.AccountRepository;
 import com.bracit.fisprocess.repository.AccountingPeriodRepository;
+import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalExposureView;
 import com.bracit.fisprocess.repository.JournalLineRepository;
 import com.bracit.fisprocess.repository.PeriodRevaluationRunRepository;
@@ -48,6 +51,7 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
     private final ExchangeRateService exchangeRateService;
     private final JournalEntryService journalEntryService;
     private final AccountRepository accountRepository;
+    private final BusinessEntityRepository businessEntityRepository;
     private final AuditService auditService;
 
     @Override
@@ -127,7 +131,7 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
         validateAccountExists(tenantId, reserveCode);
         validateAccountExists(tenantId, gainCode);
         validateAccountExists(tenantId, lossCode);
-        String baseCurrency = resolveBaseCurrency(tenantId, reserveCode);
+        String baseCurrency = resolveBaseCurrency(tenantId);
 
         for (JournalExposureView row : exposure) {
             String txCurrency = row.getTransactionCurrency();
@@ -190,11 +194,10 @@ public class PeriodEndRevaluationServiceImpl implements PeriodEndRevaluationServ
         return new RevaluationExecutionResult(generated, snapshots);
     }
 
-    private String resolveBaseCurrency(UUID tenantId, String anyAccountCode) {
-        Account account = accountRepository.findByTenantIdAndCode(tenantId, anyAccountCode)
-                .orElseThrow(() -> new RevaluationConfigurationException(
-                        "Revaluation account '" + anyAccountCode + "' not found."));
-        return account.getCurrencyCode();
+    private String resolveBaseCurrency(UUID tenantId) {
+        return businessEntityRepository.findByTenantIdAndIsActiveTrue(tenantId)
+                .map(BusinessEntity::getBaseCurrency)
+                .orElseThrow(() -> new TenantNotFoundException(tenantId.toString()));
     }
 
     private void validateAccountExists(UUID tenantId, String accountCode) {

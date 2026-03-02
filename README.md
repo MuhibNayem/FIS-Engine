@@ -12,7 +12,7 @@ Core design intent:
 - Enforce tenant isolation by default.
 - Expose integration-friendly APIs and operational controls.
 
-## 2. Current Scope (v0.0.1)
+## 2. Current Scope (v0.0.1-SNAPSHOT)
 Implemented:
 - Double-entry journal posting and query APIs.
 - Approval workflow (draft, submit, approve, reject) with maker-checker enforcement.
@@ -22,6 +22,8 @@ Implemented:
 - Realized FX settlement adjustments.
 - Year-end close endpoint.
 - Reporting APIs (trial balance, balance sheet, income statement, ledger/risk reports).
+- Hierarchy-aware reporting lines for Trial Balance, Balance Sheet, and Income Statement
+  (N-level CoA metadata + rolled-up analysis fields).
 - Redis-backed distributed rate limiting on high-risk posting paths.
 - Transactional outbox for reliable downstream publication.
 - OpenTelemetry/Prometheus instrumentation and production runbooks.

@@ -7,11 +7,11 @@
 | Field | Value |
 | :---- | :---- |
 | **Document Title** | Audit Remediation Implementation Plan |
-| **Version** | 2.0 |
-| **Date** | February 26, 2026 |
+| **Version** | 2.1 |
+| **Date** | March 2, 2026 |
 | **Prepared By** | Engineering Division |
 | **Related Audit** | Deep Codebase Audit (8.8/10) |
-| **Related Gap Analysis** | [finance-accounting-gap-analysis.md](/home/amnayem/Projects/fis-process/docs/finance-accounting-gap-analysis.md) — 18 gaps identified |
+| **Related Gap Analysis** | `docs/finance-accounting-gap-analysis.md` — 18 gaps identified |
 | **Scope** | Full remediation covering correctness, security, compliance, reporting, and operational sustainability |
 
 ---
@@ -44,9 +44,9 @@ Close all audit gaps without breaking business flows, append-only guarantees, or
 | R9 | P0 | Internal controls & compliance | GAP-08, GAP-09 | [x] |
 | R10 | P0 | Ledger integrity hardening | GAP-01, GAP-02, GAP-03 | [x] |
 | R11 | P1 | Multi-currency compliance | GAP-05, GAP-06 | [x] |
-| R12 | P1 | Financial reporting APIs | GAP-11, GAP-15 | [ ] |
-| R13 | P1 | Period management enhancements | GAP-12, GAP-13 | [ ] |
-| R14 | P2 | Operational reliability | GAP-17, GAP-18 | [ ] |
+| R12 | P1 | Financial reporting APIs | GAP-11, GAP-15 | [x] |
+| R13 | P1 | Period management enhancements | GAP-12, GAP-13 | [x] |
+| R14 | P2 | Operational reliability | GAP-17, GAP-18 | [x] |
 | R15 | P2 | Batch operations & multi-date | GAP-16, GAP-14 | [x] |
 | R16 | P3 | Multi-currency translation (future) | GAP-07 | [x] |
 | R5-fix | P1 | Complete `@Data` removal on remaining entities | — | [x] |
@@ -589,12 +589,12 @@ Validation status:
 - [x] R9: Sequential numbering deployed and backfilled.
 - [x] R10: Contra accounts, equation check, and min 2-line all enforced.
 - [x] R11: FX rounding corrected; realized gains/losses operational.
-- [ ] R12: Trial Balance, Balance Sheet, Income Statement, and GL Detail APIs deployed.
-- [ ] R13: Year-end close and auto-reversing entries operational.
-- [ ] R14: Single idempotency path; outbox cleanup running.
+- [x] R12: Trial Balance, Balance Sheet, Income Statement, and GL Detail APIs deployed.
+- [x] R13: Year-end close and auto-reversing entries operational.
+- [x] R14: Single idempotency path; outbox cleanup running.
 - [x] R15: Batch posting available; effective dates supported.
-- [ ] Full regression test run passes after all phases.
-- [ ] Gap analysis document updated to reflect all closures.
+- [x] Full regression test run passes after all phases.
+- [x] Gap analysis document updated to reflect all closures.
 
 ---
 
@@ -612,11 +612,11 @@ Validation status:
 | GAP-08 | JE approval workflow | R9.1 | [x] |
 | GAP-09 | Sequential JE numbering | R9.2 | [x] |
 | GAP-10 | Security bypass guard | R3 | [x] |
-| GAP-11 | Financial reporting APIs | R12.1 | [ ] |
-| GAP-12 | Year-end close process | R13.1 | [ ] |
-| GAP-13 | Auto-reversing entries | R13.2 | [ ] |
+| GAP-11 | Financial reporting APIs | R12.1 | [x] |
+| GAP-12 | Year-end close process | R13.1 | [x] |
+| GAP-13 | Auto-reversing entries | R13.2 | [x] |
 | GAP-14 | Effective date distinction | R15.2 | [x] |
-| GAP-15 | CoA hierarchy aggregation | R12.2 | [ ] |
+| GAP-15 | CoA hierarchy aggregation | R12.2 | [x] |
 | GAP-16 | Batch JE posting | R15.1 | [x] |
-| GAP-17 | Consumer idempotency bypass | R14.1 | [ ] |
-| GAP-18 | Outbox cleanup/archival | R14.2 | [ ] |
+| GAP-17 | Consumer idempotency bypass | R14.1 | [x] |
+| GAP-18 | Outbox cleanup/archival | R14.2 | [x] |

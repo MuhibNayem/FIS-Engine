@@ -1,6 +1,7 @@
 package com.bracit.fisprocess.service.impl;
 
 import com.bracit.fisprocess.domain.entity.Account;
+import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.entity.JournalEntry;
 import com.bracit.fisprocess.domain.entity.JournalLine;
 import com.bracit.fisprocess.domain.enums.AccountType;
@@ -12,7 +13,9 @@ import com.bracit.fisprocess.dto.response.SettlementResponseDto;
 import com.bracit.fisprocess.exception.AccountNotFoundException;
 import com.bracit.fisprocess.exception.JournalEntryNotFoundException;
 import com.bracit.fisprocess.exception.RevaluationConfigurationException;
+import com.bracit.fisprocess.exception.TenantNotFoundException;
 import com.bracit.fisprocess.repository.AccountRepository;
+import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import com.bracit.fisprocess.service.JournalEntryService;
 import com.bracit.fisprocess.service.SettlementService;
@@ -31,6 +34,7 @@ public class SettlementServiceImpl implements SettlementService {
 
     private final JournalEntryRepository journalEntryRepository;
     private final AccountRepository accountRepository;
+    private final BusinessEntityRepository businessEntityRepository;
     private final JournalEntryService journalEntryService;
     @Value("${fis.revaluation.reserve-account-code:FX_REVAL_RESERVE}")
     private String reserveAccountCode;
@@ -80,7 +84,7 @@ public class SettlementServiceImpl implements SettlementService {
         long amount = Math.abs(delta);
         String counterAccount = gain ? request.getGainAccountCode() : request.getLossAccountCode();
         String reserveAccount = reserveAccountCode;
-        String settlementCurrency = resolveBaseCurrency(tenantId, reserveAccount);
+        String settlementCurrency = resolveBaseCurrency(tenantId);
 
         JournalEntryResponseDto posted = journalEntryService.createJournalEntry(
                 tenantId,
@@ -126,9 +130,9 @@ public class SettlementServiceImpl implements SettlementService {
                 .orElseThrow(() -> new AccountNotFoundException(code));
     }
 
-    private String resolveBaseCurrency(UUID tenantId, String anyAccountCode) {
-        Account account = accountRepository.findByTenantIdAndCode(tenantId, anyAccountCode)
-                .orElseThrow(() -> new AccountNotFoundException(anyAccountCode));
-        return account.getCurrencyCode();
+    private String resolveBaseCurrency(UUID tenantId) {
+        return businessEntityRepository.findByTenantIdAndIsActiveTrue(tenantId)
+                .map(BusinessEntity::getBaseCurrency)
+                .orElseThrow(() -> new TenantNotFoundException(tenantId.toString()));
     }
 }

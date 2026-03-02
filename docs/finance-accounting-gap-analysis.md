@@ -8,9 +8,21 @@
 
 ---
 
+## Status Update (2026-03-02)
+
+This document remains the original gap-identification baseline.
+Implementation status has since advanced and is tracked in `docs/10-audit-remediation-plan.md`.
+
+Current closure status:
+- All baseline gaps in this document (GAP-01 through GAP-16) are implemented in code and marked complete in the remediation plan.
+- Additional operational gaps (GAP-17 and GAP-18), tracked in the remediation plan, are also marked complete.
+- Remaining non-engineering governance item: explicit security review sign-off.
+
+---
+
 ## Executive Summary
 
-The FIS Engine's **core ledger mechanics are strict and correct** — double-entry enforcement, normal balance semantics, append-only immutability, reversal mechanics, and concurrency controls are all properly implemented. However, a production-grade Financial Information System requires additional accounting features, regulatory compliance capabilities, and internal controls that are currently absent.
+At the time of this audit baseline, the FIS Engine's **core ledger mechanics were strict and correct** — double-entry enforcement, normal balance semantics, append-only immutability, reversal mechanics, and concurrency controls were properly implemented. However, a production-grade Financial Information System still required additional accounting features, regulatory compliance capabilities, and internal controls.
 
 This document catalogs **16 identified gaps** across 5 categories, classifying each by severity and mapping to the accounting standard or principle it violates.
 
@@ -246,24 +258,24 @@ This document catalogs **16 identified gaps** across 5 categories, classifying e
 
 ## Summary Matrix
 
-| ID | Gap | Severity | Category | Standard/Principle |
-|---|---|---|---|---|
-| GAP-01 | Min 2-line enforcement | Medium | Ledger Integrity | Double-Entry Fundamental |
-| GAP-02 | Contra account support | High | Ledger Integrity | GAAP Account Classification |
-| GAP-03 | Equation integrity check | High | Ledger Integrity | Fundamental Equation |
-| GAP-04 | Hash chain race condition | High | Ledger Integrity | Tamper-Evident Trail |
-| GAP-05 | Realized FX gains/losses | High | Multi-Currency | IAS 21 / ASC 830 |
-| GAP-06 | Rounding difference account | High | Multi-Currency | Arithmetic Integrity |
-| GAP-07 | Functional currency translation | Low | Multi-Currency | IAS 21 Translation |
-| **GAP-08** | **JE approval workflow** | **Critical** | **Controls** | **SOX 302/404** |
-| **GAP-09** | **Sequential JE numbering** | **Critical** | **Controls** | **EU VAT / Local GAAP** |
-| **GAP-10** | **Security bypass guard** | **Critical** | **Controls** | **Access Control** |
-| GAP-11 | Financial reporting APIs | Medium | Reporting | Core Statements |
-| GAP-12 | Year-end close process | Medium | Reporting | GAAP Period-End |
-| GAP-13 | Auto-reversing entries | Medium | Reporting | Accrual Matching |
-| GAP-14 | Effective date distinction | Low | Reporting | Multi-Date Accounting |
-| GAP-15 | CoA hierarchy aggregation | Medium | Structural | Hierarchical Reporting |
-| GAP-16 | Batch JE posting | Medium | Structural | Operational Atomicity |
+| ID | Gap | Severity | Category | Standard/Principle | Status (2026-03-02) |
+|---|---|---|---|---|---|
+| GAP-01 | Min 2-line enforcement | Medium | Ledger Integrity | Double-Entry Fundamental | Closed |
+| GAP-02 | Contra account support | High | Ledger Integrity | GAAP Account Classification | Closed |
+| GAP-03 | Equation integrity check | High | Ledger Integrity | Fundamental Equation | Closed |
+| GAP-04 | Hash chain race condition | High | Ledger Integrity | Tamper-Evident Trail | Closed |
+| GAP-05 | Realized FX gains/losses | High | Multi-Currency | IAS 21 / ASC 830 | Closed |
+| GAP-06 | Rounding difference account | High | Multi-Currency | Arithmetic Integrity | Closed |
+| GAP-07 | Functional currency translation | Low | Multi-Currency | IAS 21 Translation | Closed |
+| **GAP-08** | **JE approval workflow** | **Critical** | **Controls** | **SOX 302/404** | **Closed** |
+| **GAP-09** | **Sequential JE numbering** | **Critical** | **Controls** | **EU VAT / Local GAAP** | **Closed** |
+| **GAP-10** | **Security bypass guard** | **Critical** | **Controls** | **Access Control** | **Closed** |
+| GAP-11 | Financial reporting APIs | Medium | Reporting | Core Statements | Closed |
+| GAP-12 | Year-end close process | Medium | Reporting | GAAP Period-End | Closed |
+| GAP-13 | Auto-reversing entries | Medium | Reporting | Accrual Matching | Closed |
+| GAP-14 | Effective date distinction | Low | Reporting | Multi-Date Accounting | Closed |
+| GAP-15 | CoA hierarchy aggregation | Medium | Structural | Hierarchical Reporting | Closed |
+| GAP-16 | Batch JE posting | Medium | Structural | Operational Atomicity | Closed |
 
 ---
 

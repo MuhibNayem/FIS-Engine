@@ -89,4 +89,19 @@ public class ReportingRepository {
     public boolean accountExists(UUID tenantId, String accountCode) {
         return ReportingLedgerQueries.accountExists(jdbcTemplate, tenantId, accountCode);
     }
+
+    public List<Map<String, Object>> findAccountHierarchy(UUID tenantId) {
+        return jdbcTemplate.queryForList("""
+                SELECT
+                    a.code AS account_code,
+                    a.name AS account_name,
+                    a.account_type AS account_type,
+                    p.code AS parent_account_code
+                FROM fis_account a
+                LEFT JOIN fis_account p ON p.account_id = a.parent_account_id
+                WHERE a.tenant_id = ?
+                  AND a.is_active = TRUE
+                ORDER BY a.code
+                """, tenantId);
+    }
 }

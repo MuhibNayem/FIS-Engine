@@ -17,6 +17,11 @@ public class TrialBalanceLineDto {
     private String accountCode;
     private String accountName;
     private String accountType;
+    private String parentAccountCode;
+    private int hierarchyLevel;
+    private boolean leaf;
     private long debitBalance;
     private long creditBalance;
+    private long rolledUpDebitBalance;
+    private long rolledUpCreditBalance;
 }

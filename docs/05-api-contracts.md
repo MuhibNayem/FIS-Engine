@@ -211,16 +211,25 @@ Error format: RFC 7807 `application/problem+json`
 - `GET /reports/trial-balance`
   - Headers: `X-Tenant-Id`
   - Query: `asOfDate` (uses JE `effective_date` for filtering; falls back to `posted_date` for legacy rows)
+  - Line model includes hierarchy-aware fields:
+    - `parentAccountCode`, `hierarchyLevel`, `leaf`
+    - `rolledUpDebitBalance`, `rolledUpCreditBalance`
   - Success: `200 OK`
 
 - `GET /reports/balance-sheet`
   - Headers: `X-Tenant-Id`
   - Query: `asOfDate` (uses JE `effective_date` for filtering; falls back to `posted_date` for legacy rows)
+  - Line model includes hierarchy-aware fields:
+    - `parentAccountCode`, `hierarchyLevel`, `leaf`
+    - `rolledUpBalanceCents`, `formattedRolledUpBalance`
   - Success: `200 OK`
 
 - `GET /reports/income-statement`
   - Headers: `X-Tenant-Id`
   - Query: `fromDate`, `toDate` (uses JE `effective_date` for filtering; falls back to `posted_date` for legacy rows)
+  - Line model includes hierarchy-aware fields:
+    - `parentAccountCode`, `hierarchyLevel`, `leaf`
+    - `rolledUpAmountCents`, `formattedRolledUpAmount`
   - Success: `200 OK`
 
 - `GET /reports/general-ledger/{accountCode}`

@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -114,6 +115,57 @@ class ReportingServiceImplTest {
                         assertThat(result.isBalanced()).isFalse();
                         assertThat(result.getTotalDebits()).isNotEqualTo(result.getTotalCredits());
                 }
+
+                @Test
+                @DisplayName("should expose hierarchy metadata and rolled-up balances")
+                void shouldExposeHierarchyAndRollups() {
+                        when(reportingRepository.findTrialBalanceLines(TENANT_ID, AS_OF))
+                                        .thenReturn(List.of(
+                                                        Map.of("account_code", "1101", "account_name", "Cash Main",
+                                                                        "account_type", "ASSET", "total_debits", 5000L,
+                                                                        "total_credits", 0L),
+                                                        Map.of("account_code", "1201", "account_name", "Receivable A",
+                                                                        "account_type", "ASSET", "total_debits", 3000L,
+                                                                        "total_credits", 0L),
+                                                        Map.of("account_code", "2001", "account_name", "Loan",
+                                                                        "account_type", "LIABILITY", "total_debits", 0L,
+                                                                        "total_credits", 8000L)));
+                        when(reportingRepository.findAccountHierarchy(TENANT_ID))
+                                        .thenReturn(List.of(
+                                                        row("account_code", "1000", "account_name", "Current Assets",
+                                                                        "account_type", "ASSET", "parent_account_code", null),
+                                                        Map.of("account_code", "1101", "account_name", "Cash Main",
+                                                                        "account_type", "ASSET", "parent_account_code", "1000"),
+                                                        Map.of("account_code", "1201", "account_name", "Receivable A",
+                                                                        "account_type", "ASSET", "parent_account_code", "1000"),
+                                                        row("account_code", "2001", "account_name", "Loan",
+                                                                        "account_type", "LIABILITY", "parent_account_code", null)));
+
+                        TrialBalanceReportDto result = service.generateTrialBalance(TENANT_ID, AS_OF);
+
+                        var parent = result.getLines().stream()
+                                        .filter(line -> "1000".equals(line.getAccountCode()))
+                                        .findFirst()
+                                        .orElseThrow();
+                        assertThat(parent.getHierarchyLevel()).isZero();
+                        assertThat(parent.getDebitBalance()).isZero();
+                        assertThat(parent.getRolledUpDebitBalance()).isEqualTo(8000L);
+                        assertThat(parent.isLeaf()).isFalse();
+
+                        var child = result.getLines().stream()
+                                        .filter(line -> "1101".equals(line.getAccountCode()))
+                                        .findFirst()
+                                        .orElseThrow();
+                        assertThat(child.getParentAccountCode()).isEqualTo("1000");
+                        assertThat(child.getHierarchyLevel()).isEqualTo(1);
+                        assertThat(child.getDebitBalance()).isEqualTo(5000L);
+                        assertThat(child.getRolledUpDebitBalance()).isEqualTo(5000L);
+                        assertThat(child.isLeaf()).isTrue();
+
+                        assertThat(result.getTotalDebits()).isEqualTo(8000L);
+                        assertThat(result.getTotalCredits()).isEqualTo(8000L);
+                        assertThat(result.isBalanced()).isTrue();
+                }
         }
 
         // ─── Balance Sheet ────────────────────────────────────────────────────
@@ -145,6 +197,44 @@ class ReportingServiceImplTest {
                         assertThat(result.getLiabilities().getLines()).hasSize(1);
                         assertThat(result.getEquity().getLines()).hasSize(1);
                 }
+
+                @Test
+                @DisplayName("should render full asset hierarchy including zero-balance nodes")
+                void shouldRenderFullAssetHierarchy() {
+                        when(reportingRepository.findBalanceSheetAccounts(TENANT_ID, AS_OF))
+                                        .thenReturn(List.of(
+                                                        Map.of("account_code", "1101", "account_name", "Cash",
+                                                                        "account_type", "ASSET", "net_balance", 7500L)));
+                        when(reportingRepository.findAccountHierarchy(TENANT_ID))
+                                        .thenReturn(List.of(
+                                                        row("account_code", "1000", "account_name", "Current Assets",
+                                                                        "account_type", "ASSET", "parent_account_code", null),
+                                                        Map.of("account_code", "1101", "account_name", "Cash",
+                                                                        "account_type", "ASSET", "parent_account_code", "1000"),
+                                                        Map.of("account_code", "1201", "account_name", "Receivables",
+                                                                        "account_type", "ASSET", "parent_account_code", "1000")));
+
+                        BalanceSheetReportDto result = service.generateBalanceSheet(TENANT_ID, AS_OF);
+
+                        assertThat(result.getAssets().getLines()).hasSize(3);
+                        var parent = result.getAssets().getLines().stream()
+                                        .filter(line -> "1000".equals(line.getAccountCode()))
+                                        .findFirst()
+                                        .orElseThrow();
+                        assertThat(parent.getHierarchyLevel()).isZero();
+                        assertThat(parent.getBalanceCents()).isZero();
+                        assertThat(parent.getRolledUpBalanceCents()).isEqualTo(7500L);
+                        assertThat(parent.isLeaf()).isFalse();
+
+                        var zeroLeaf = result.getAssets().getLines().stream()
+                                        .filter(line -> "1201".equals(line.getAccountCode()))
+                                        .findFirst()
+                                        .orElseThrow();
+                        assertThat(zeroLeaf.getHierarchyLevel()).isEqualTo(1);
+                        assertThat(zeroLeaf.getBalanceCents()).isZero();
+                        assertThat(zeroLeaf.getRolledUpBalanceCents()).isZero();
+                        assertThat(zeroLeaf.isLeaf()).isTrue();
+                }
         }
 
         // ─── Income Statement ─────────────────────────────────────────────────
@@ -170,6 +260,48 @@ class ReportingServiceImplTest {
                         assertThat(result.getTotalRevenue()).isEqualTo(8000L);
                         assertThat(result.getTotalExpenses()).isEqualTo(3000L);
                         assertThat(result.getNetIncome()).isEqualTo(5000L);
+                }
+
+                @Test
+                @DisplayName("should render full income-statement hierarchy with rollups")
+                void shouldRenderFullIncomeHierarchy() {
+                        when(reportingRepository.findIncomeStatementAccounts(TENANT_ID, FROM, TO))
+                                        .thenReturn(List.of(
+                                                        Map.of("account_code", "4101", "account_name", "Product Sales",
+                                                                        "account_type", "REVENUE", "net_amount", -9000L),
+                                                        Map.of("account_code", "5101", "account_name", "Payroll",
+                                                                        "account_type", "EXPENSE", "net_amount", 2500L)));
+                        when(reportingRepository.findAccountHierarchy(TENANT_ID))
+                                        .thenReturn(List.of(
+                                                        row("account_code", "4000", "account_name", "Revenue Group",
+                                                                        "account_type", "REVENUE", "parent_account_code", null),
+                                                        Map.of("account_code", "4101", "account_name", "Product Sales",
+                                                                        "account_type", "REVENUE", "parent_account_code", "4000"),
+                                                        Map.of("account_code", "4201", "account_name", "Service Sales",
+                                                                        "account_type", "REVENUE", "parent_account_code", "4000"),
+                                                        row("account_code", "5000", "account_name", "Expense Group",
+                                                                        "account_type", "EXPENSE", "parent_account_code", null),
+                                                        Map.of("account_code", "5101", "account_name", "Payroll",
+                                                                        "account_type", "EXPENSE", "parent_account_code", "5000")));
+
+                        IncomeStatementReportDto result = service.generateIncomeStatement(TENANT_ID, FROM, TO);
+
+                        assertThat(result.getRevenue().getLines()).hasSize(3);
+                        var revenueParent = result.getRevenue().getLines().stream()
+                                        .filter(line -> "4000".equals(line.getAccountCode()))
+                                        .findFirst()
+                                        .orElseThrow();
+                        assertThat(revenueParent.getRolledUpAmountCents()).isEqualTo(9000L);
+                        assertThat(revenueParent.getAmountCents()).isZero();
+
+                        var revenueZeroLeaf = result.getRevenue().getLines().stream()
+                                        .filter(line -> "4201".equals(line.getAccountCode()))
+                                        .findFirst()
+                                        .orElseThrow();
+                        assertThat(revenueZeroLeaf.getAmountCents()).isZero();
+                        assertThat(revenueZeroLeaf.getRolledUpAmountCents()).isZero();
+                        assertThat(revenueZeroLeaf.isLeaf()).isTrue();
+                        assertThat(result.getNetIncome()).isEqualTo(6500L);
                 }
 
                 @Test
@@ -424,5 +556,13 @@ class ReportingServiceImplTest {
 
                 assertThatThrownBy(() -> service.generateTrialBalance(unknownTenant, AS_OF))
                                 .isInstanceOf(TenantNotFoundException.class);
+        }
+
+        private static Map<String, Object> row(Object... keyValuePairs) {
+                Map<String, Object> map = new LinkedHashMap<>();
+                for (int i = 0; i < keyValuePairs.length; i += 2) {
+                        map.put((String) keyValuePairs[i], keyValuePairs[i + 1]);
+                }
+                return map;
         }
 }

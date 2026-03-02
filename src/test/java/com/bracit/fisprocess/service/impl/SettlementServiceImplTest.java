@@ -1,6 +1,7 @@
 package com.bracit.fisprocess.service.impl;
 
 import com.bracit.fisprocess.domain.entity.Account;
+import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.entity.JournalEntry;
 import com.bracit.fisprocess.domain.entity.JournalLine;
 import com.bracit.fisprocess.domain.enums.AccountType;
@@ -8,6 +9,7 @@ import com.bracit.fisprocess.domain.enums.JournalStatus;
 import com.bracit.fisprocess.dto.request.SettlementRequestDto;
 import com.bracit.fisprocess.dto.response.JournalEntryResponseDto;
 import com.bracit.fisprocess.repository.AccountRepository;
+import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import com.bracit.fisprocess.service.JournalEntryService;
 import org.junit.jupiter.api.DisplayName;
@@ -40,6 +42,8 @@ class SettlementServiceImplTest {
     private JournalEntryRepository journalEntryRepository;
     @Mock
     private AccountRepository accountRepository;
+    @Mock
+    private BusinessEntityRepository businessEntityRepository;
     @Mock
     private JournalEntryService journalEntryService;
 
@@ -94,6 +98,13 @@ class SettlementServiceImplTest {
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_REVAL_RESERVE")).thenReturn(Optional.of(reserve));
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_GAIN")).thenReturn(Optional.of(gain));
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_LOSS")).thenReturn(Optional.of(loss));
+        when(businessEntityRepository.findByTenantIdAndIsActiveTrue(tenantId))
+                .thenReturn(Optional.of(BusinessEntity.builder()
+                        .tenantId(tenantId)
+                        .name("Tenant")
+                        .baseCurrency("USD")
+                        .isActive(true)
+                        .build()));
         when(journalEntryService.createJournalEntry(eq(tenantId), any(), eq("FIS_ADMIN")))
                 .thenReturn(JournalEntryResponseDto.builder().journalEntryId(UUID.randomUUID()).status(JournalStatus.POSTED).build());
 
@@ -161,6 +172,13 @@ class SettlementServiceImplTest {
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_REVAL_RESERVE")).thenReturn(Optional.of(reserve));
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_GAIN")).thenReturn(Optional.of(gain));
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_LOSS")).thenReturn(Optional.of(loss));
+        when(businessEntityRepository.findByTenantIdAndIsActiveTrue(tenantId))
+                .thenReturn(Optional.of(BusinessEntity.builder()
+                        .tenantId(tenantId)
+                        .name("Tenant")
+                        .baseCurrency("USD")
+                        .isActive(true)
+                        .build()));
         when(journalEntryService.createJournalEntry(eq(tenantId), any(), eq("FIS_ADMIN")))
                 .thenReturn(JournalEntryResponseDto.builder().journalEntryId(UUID.randomUUID()).status(JournalStatus.POSTED).build());
 
@@ -230,7 +248,6 @@ class SettlementServiceImplTest {
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_REVAL_RESERVE")).thenReturn(Optional.of(reserve));
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_GAIN")).thenReturn(Optional.of(gain));
         when(accountRepository.findByTenantIdAndCode(tenantId, "FX_LOSS")).thenReturn(Optional.of(loss));
-
         SettlementRequestDto request = SettlementRequestDto.builder()
                 .eventId("SETTLE-3")
                 .originalJournalEntryId(originalId)

@@ -96,7 +96,7 @@ final class ReportingLedgerQueries {
                 LEFT JOIN fis_journal_line jl ON jl.journal_entry_id = je.journal_entry_id
                 WHERE je.tenant_id = ?
                   AND je.effective_date BETWEEN ? AND ?
-                  AND je.status IN ('POSTED', 'CORRECTION', 'REVERSED')
+                  AND je.status IN ('POSTED', 'CORRECTION', 'REVERSAL')
                 GROUP BY je.journal_entry_id, je.sequence_number, je.posted_date,
                          je.description, je.status, je.created_by
                 ORDER BY je.effective_date, je.sequence_number
@@ -110,7 +110,7 @@ final class ReportingLedgerQueries {
                 FROM fis_journal_entry je
                 WHERE je.tenant_id = ?
                   AND je.effective_date BETWEEN ? AND ?
-                  AND je.status IN ('POSTED', 'CORRECTION', 'REVERSED')
+                  AND je.status IN ('POSTED', 'CORRECTION', 'REVERSAL')
                 """, Long.class, tenantId, fromDate, toDate);
         return result != null ? result : 0L;
     }

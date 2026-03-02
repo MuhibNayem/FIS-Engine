@@ -2,6 +2,7 @@ package com.bracit.fisprocess.service.impl;
 
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.AccountingPeriod;
+import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.entity.PeriodRevaluationRun;
 import com.bracit.fisprocess.domain.enums.AccountType;
 import com.bracit.fisprocess.domain.enums.PeriodStatus;
@@ -13,6 +14,7 @@ import com.bracit.fisprocess.exception.RevaluationAlreadyRunException;
 import com.bracit.fisprocess.exception.RevaluationConfigurationException;
 import com.bracit.fisprocess.repository.AccountRepository;
 import com.bracit.fisprocess.repository.AccountingPeriodRepository;
+import com.bracit.fisprocess.repository.BusinessEntityRepository;
 import com.bracit.fisprocess.repository.JournalExposureView;
 import com.bracit.fisprocess.repository.JournalLineRepository;
 import com.bracit.fisprocess.repository.PeriodRevaluationRunRepository;
@@ -58,6 +60,8 @@ class PeriodEndRevaluationServiceImplTest {
     private JournalEntryService journalEntryService;
     @Mock
     private AccountRepository accountRepository;
+    @Mock
+    private BusinessEntityRepository businessEntityRepository;
     @Mock
     private AuditService auditService;
 
@@ -165,6 +169,13 @@ class PeriodEndRevaluationServiceImplTest {
                 .code("FX_UNREALIZED_LOSS")
                 .currencyCode("USD")
                 .build()));
+        when(businessEntityRepository.findByTenantIdAndIsActiveTrue(tenantId))
+                .thenReturn(Optional.of(BusinessEntity.builder()
+                        .tenantId(tenantId)
+                        .name("Tenant")
+                        .baseCurrency("USD")
+                        .isActive(true)
+                        .build()));
         when(journalLineRepository.aggregateExposureByCurrency(tenantId, period.getStartDate(), period.getEndDate()))
                 .thenReturn(List.of(exposure));
         when(exchangeRateService.resolveRate(eq(tenantId), eq("EUR"), eq("USD"), eq(period.getEndDate())))
@@ -219,6 +230,13 @@ class PeriodEndRevaluationServiceImplTest {
                 .accountType(AccountType.EXPENSE)
                 .currencyCode("USD")
                 .build()));
+        when(businessEntityRepository.findByTenantIdAndIsActiveTrue(tenantId))
+                .thenReturn(Optional.of(BusinessEntity.builder()
+                        .tenantId(tenantId)
+                        .name("Tenant")
+                        .baseCurrency("USD")
+                        .isActive(true)
+                        .build()));
         when(journalLineRepository.aggregateExposureByCurrency(tenantId, period.getStartDate(), period.getEndDate()))
                 .thenReturn(List.of());
 

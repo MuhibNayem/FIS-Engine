@@ -16,6 +16,11 @@ public class BalanceSheetLineDto {
 
     private String accountCode;
     private String accountName;
+    private String parentAccountCode;
+    private int hierarchyLevel;
+    private boolean leaf;
     private long balanceCents;
+    private long rolledUpBalanceCents;
     private String formattedBalance;
+    private String formattedRolledUpBalance;
 }

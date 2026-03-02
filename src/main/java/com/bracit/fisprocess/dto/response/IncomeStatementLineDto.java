@@ -16,6 +16,11 @@ public class IncomeStatementLineDto {
 
     private String accountCode;
     private String accountName;
+    private String parentAccountCode;
+    private int hierarchyLevel;
+    private boolean leaf;
     private long amountCents;
+    private long rolledUpAmountCents;
     private String formattedAmount;
+    private String formattedRolledUpAmount;
 }

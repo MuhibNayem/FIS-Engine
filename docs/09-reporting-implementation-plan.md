@@ -7,11 +7,20 @@
 | Field | Value |
 | :---- | :---- |
 | **Document Title** | Reporting Implementation Plan |
-| **Version** | 1.0 |
-| **Date** | February 26, 2026 |
+| **Version** | 1.1 |
+| **Date** | March 2, 2026 |
 | **Prepared By** | Engineering Division |
 | **Classification** | Confidential — Internal Use Only |
 | **Depends On** | `docs/SRS.md`, `docs/03-architecture.md`, `docs/08-implementation-roadmap.md` |
+
+---
+
+## Implementation Status (2026-03-02)
+
+- Core reporting endpoints are implemented under `/v1/reports/**`.
+- Hierarchy-aware line rendering is implemented for Trial Balance, Balance Sheet, and Income Statement with N-level CoA metadata and rolled-up fields.
+- OpenAPI reporting schemas are synced with hierarchy-aware response fields.
+- Multi-ledger per tenant remains tracked separately in `docs/multi-ledger-implementation-plan.md`.
 
 ---
 
