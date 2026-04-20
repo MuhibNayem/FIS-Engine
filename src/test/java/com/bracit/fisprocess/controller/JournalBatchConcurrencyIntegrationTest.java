@@ -1,6 +1,6 @@
 package com.bracit.fisprocess.controller;
 
-import com.bracit.fisprocess.AbstractIntegrationTest;
+import com.bracit.fisprocess.TestcontainersIntegrationTest;
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.AccountingPeriod;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
@@ -41,7 +41,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("Journal Batch Concurrency Integration Tests")
-class JournalBatchConcurrencyIntegrationTest extends AbstractIntegrationTest {
+class JournalBatchConcurrencyIntegrationTest extends TestcontainersIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

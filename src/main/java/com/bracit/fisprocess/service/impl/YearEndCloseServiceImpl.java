@@ -142,6 +142,9 @@ public class YearEndCloseServiceImpl implements YearEndCloseService {
         String eventId = "YEAR-END-CLOSE:" + fiscalYear + ":" + tenantId;
         LocalDate closingDate = LocalDate.of(fiscalYear, 12, 31);
 
+        // CRITICAL: Validate double-entry balance before posting
+        validateClosingEntryBalances(closingLines);
+
         DraftJournalEntry closingDraft = DraftJournalEntry.builder()
                 .tenantId(tenantId)
                 .eventId(eventId)
@@ -198,6 +201,37 @@ public class YearEndCloseServiceImpl implements YearEndCloseService {
         if (!openPeriods.isEmpty()) {
             throw new YearEndCloseException(
                     "Cannot perform year-end close. The following periods are not HARD_CLOSED: " + openPeriods);
+        }
+    }
+
+    /**
+     * Validates that the closing journal entry satisfies double-entry accounting:
+     * total debits must equal total credits.
+     * <p>
+     * This is a critical safety check to prevent posting unbalanced entries
+     * that would corrupt the ledger.
+     */
+    private void validateClosingEntryBalances(List<DraftJournalLine> closingLines) {
+        long totalDebits = closingLines.stream()
+                .filter(line -> !line.isCredit())
+                .mapToLong(DraftJournalLine::getAmountCents)
+                .sum();
+
+        long totalCredits = closingLines.stream()
+                .filter(DraftJournalLine::isCredit)
+                .mapToLong(DraftJournalLine::getAmountCents)
+                .sum();
+
+        if (totalDebits != totalCredits) {
+            throw new YearEndCloseException(
+                    "Year-end closing entry is unbalanced: total debits (%d) != total credits (%d). "
+                            + "This indicates a data integrity issue in P&L account balances.".formatted(totalDebits, totalCredits));
+        }
+
+        if (totalDebits == 0 && totalCredits == 0) {
+            throw new YearEndCloseException(
+                    "Year-end closing entry has zero amounts on both sides. "
+                            + "This indicates all P&L accounts already have zero balances.");
         }
     }
 }

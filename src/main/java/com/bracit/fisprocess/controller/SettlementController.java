@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.dto.request.SettlementRequestDto;
 import com.bracit.fisprocess.dto.response.SettlementResponseDto;
 import com.bracit.fisprocess.service.SettlementService;
@@ -18,6 +19,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/settlements")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class SettlementController {
 
     private final SettlementService settlementService;

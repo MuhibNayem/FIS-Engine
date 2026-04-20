@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.dto.request.ExchangeRateUploadDto;
 import com.bracit.fisprocess.dto.response.ExchangeRateResponseDto;
 import com.bracit.fisprocess.service.ExchangeRateService;
@@ -23,6 +24,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/exchange-rates")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class ExchangeRateController {
 
     private final ExchangeRateService exchangeRateService;

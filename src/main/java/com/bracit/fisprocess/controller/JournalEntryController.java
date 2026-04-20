@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.domain.enums.JournalStatus;
 import com.bracit.fisprocess.dto.request.CorrectionRequestDto;
 import com.bracit.fisprocess.dto.request.CreateJournalEntryBatchRequestDto;
@@ -15,6 +16,8 @@ import com.bracit.fisprocess.dto.response.JournalWorkflowActionResponseDto;
 import com.bracit.fisprocess.service.JournalReversalService;
 import com.bracit.fisprocess.service.JournalEntryService;
 import com.bracit.fisprocess.service.JournalWorkflowService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -40,6 +43,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/journal-entries")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class JournalEntryController {
 
     private final JournalEntryService journalEntryService;
@@ -83,8 +87,8 @@ public class JournalEntryController {
             @RequestParam(required = false) @Nullable String accountCode,
             @RequestParam(required = false) @Nullable JournalStatus status,
             @RequestParam(required = false) @Nullable String referenceId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         Page<JournalEntryResponseDto> result = journalEntryService.listJournalEntries(
                 tenantId, postedDateFrom, postedDateTo, accountCode, status, referenceId,
                 PageRequest.of(page, size));

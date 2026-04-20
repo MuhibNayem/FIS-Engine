@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.dto.request.RunRevaluationRequestDto;
 import com.bracit.fisprocess.dto.request.RunTranslationRequestDto;
 import com.bracit.fisprocess.dto.response.RevaluationResponseDto;
@@ -22,6 +23,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/revaluations")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class RevaluationController {
 
     private final PeriodEndRevaluationService periodEndRevaluationService;

@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -84,6 +86,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    @Cacheable(value = "accounts", key = "#tenantId.toString() + ':' + #accountCode", unless = "#result == null")
     public AccountResponseDto getAccountByCode(UUID tenantId, String accountCode) {
         validateTenantExists(tenantId);
         validateAccountCodeFormat(accountCode);
@@ -107,6 +110,7 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "accounts", key = "#tenantId.toString() + ':' + #accountCode")
     public AccountResponseDto updateAccount(UUID tenantId, String accountCode, UpdateAccountRequestDto request,
             String performedBy) {
         validateTenantExists(tenantId);
@@ -183,6 +187,8 @@ public class AccountServiceImpl implements AccountService {
 
         if (request.getParentAccountCode() != null) {
             Account parent = findAccountOrThrow(tenantId, request.getParentAccountCode());
+            // Prevent circular parent-child relationships
+            validateNoCircularRelationship(account.getCode(), parent);
             account.setParentAccount(parent);
         }
 
@@ -219,6 +225,38 @@ public class AccountServiceImpl implements AccountService {
         } catch (IllegalArgumentException e) {
             // Fallback for unknown currencies
             return String.format("%.2f %s", balanceCents / 100.0, currencyCode);
+        }
+    }
+
+    /**
+     * Validates that assigning the given parent to an account does not create
+     * a circular relationship (i.e., the parent is not a descendant of the account).
+     * <p>
+     * Traverses the parent hierarchy up to a maximum depth to prevent infinite loops.
+     *
+     * @param childCode the account code being assigned a parent
+     * @param parent    the proposed parent account
+     * @throws IllegalArgumentException if a circular relationship would be created
+     */
+    private void validateNoCircularRelationship(String childCode, Account parent) {
+        // Maximum hierarchy depth to prevent infinite loops (reasonable limit for CoA)
+        int maxDepth = 50;
+        int depth = 0;
+        Account current = parent;
+
+        while (current != null && depth < maxDepth) {
+            if (current.getCode().equals(childCode)) {
+                throw new IllegalArgumentException(
+                        "Circular parent-child relationship detected: account '%s' cannot be its own descendant"
+                                .formatted(childCode));
+            }
+            current = current.getParentAccount();
+            depth++;
+        }
+
+        if (depth >= maxDepth) {
+            throw new IllegalArgumentException(
+                    "Account hierarchy exceeds maximum depth of %d levels".formatted(maxDepth));
         }
     }
 }

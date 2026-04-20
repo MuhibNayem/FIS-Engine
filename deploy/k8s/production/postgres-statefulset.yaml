@@ -1,0 +1,247 @@
+# --- PostgreSQL StorageClass ---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: postgres-gp3
+  labels:
+    app: postgres
+    environment: production
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+  encrypted: "true"
+  iops: "3000"
+  throughput: "125"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+# --- PostgreSQL ConfigMap ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: fis-production
+  labels:
+    app: postgres
+    environment: production
+data:
+  POSTGRES_DB: "fis"
+  POSTGRES_USER: "fis"
+  PGDATA: "/var/lib/postgresql/data/pgdata"
+  postgresql.conf: |
+    # --- Connection ---
+    max_connections = 200
+    superuser_reserved_connections = 5
+    # --- WAL & Replication ---
+    wal_level = replica
+    max_wal_senders = 10
+    max_replication_slots = 10
+    hot_standby = on
+    hot_standby_feedback = on
+    # --- Checkpointing ---
+    checkpoint_timeout = 10min
+    checkpoint_completion_target = 0.9
+    max_wal_size = 2GB
+    min_wal_size = 512MB
+    # --- Memory ---
+    shared_buffers = 512MB
+    effective_cache_size = 2GB
+    work_mem = 16MB
+    maintenance_work_mem = 256MB
+    # --- Logging ---
+    log_min_duration_statement = 500
+    log_checkpoints = on
+    log_connections = on
+    log_disconnections = on
+    log_lock_waits = on
+    log_temp_files = 0
+    log_autovacuum_min_duration = 0
+    # --- Performance ---
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    default_statistics_target = 100
+---
+# --- PostgreSQL Service (primary) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-primary
+  namespace: fis-production
+  labels:
+    app: postgres
+    role: primary
+    environment: production
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    app: postgres
+    role: primary
+---
+# --- PostgreSQL Service (read replica) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica
+  namespace: fis-production
+  labels:
+    app: postgres
+    role: replica
+    environment: production
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    app: postgres
+    role: replica
+---
+# --- PostgreSQL Headless Service (for StatefulSet) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: fis-production
+  labels:
+    app: postgres
+    environment: production
+spec:
+  clusterIP: None
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    app: postgres
+  publishNotReadyAddresses: true
+---
+# --- PostgreSQL StatefulSet ---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: fis-production
+  labels:
+    app: postgres
+    environment: production
+spec:
+  serviceName: postgres-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        environment: production
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+      containers:
+        # --- Primary PostgreSQL ---
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: postgres-config
+            - secretRef:
+                name: postgres-secret
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "4"
+              memory: "4Gi"
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-config-volume
+              mountPath: /etc/postgresql
+      volumes:
+        - name: postgres-config-volume
+          configMap:
+            name: postgres-config
+            items:
+              - key: postgresql.conf
+                path: postgresql.conf
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+        labels:
+          app: postgres
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: postgres-gp3
+        resources:
+          requests:
+            storage: 100Gi
+---
+# --- PostgreSQL Secret Template ---
+# NOTE: Replace with real values via Vault/External Secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: fis-production
+  labels:
+    app: postgres
+    environment: production
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "<POSTGRES_PASSWORD>"

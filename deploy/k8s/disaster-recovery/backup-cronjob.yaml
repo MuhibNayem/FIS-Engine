@@ -1,0 +1,183 @@
+# --- ServiceAccount for backup CronJob ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-backup-sa
+  namespace: fis-production
+  labels:
+    app: postgres-backup
+    environment: production
+---
+# --- IAM Role for S3 access (AWS IRSA annotation) ---
+# Replace with your actual IAM role ARN
+# iam.amazonaws.com/role: arn:aws:iam::<ACCOUNT_ID>:role/fis-postgres-backup-role
+---
+# --- Backup ConfigMap ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-backup-config
+  namespace: fis-production
+  labels:
+    app: postgres-backup
+    environment: production
+data:
+  BACKUP_SCHEDULE: "0 2 * * *"  # Daily at 2 AM UTC
+  BACKUP_RETENTION_DAYS: "30"
+  S3_BUCKET: "fis-engine-backups"
+  S3_REGION: "us-east-1"
+  PG_HOST: "postgres-primary"
+  PG_PORT: "5432"
+  PG_DATABASE: "fis"
+  PG_USERNAME: "fis"
+  BACKUP_SCRIPT: |
+    #!/bin/sh
+    set -euo pipefail
+
+    TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
+    BACKUP_FILE="fis-db-backup-${TIMESTAMP}.sql.gz"
+    S3_PATH="s3://${S3_BUCKET}/postgresql/${BACKUP_FILE}"
+
+    echo "[$(date)] Starting PostgreSQL backup..."
+
+    # Export backup
+    PGPASSWORD="${PG_PASSWORD}" pg_dump \
+      -h "${PG_HOST}" \
+      -p "${PG_PORT}" \
+      -U "${PG_USERNAME}" \
+      -d "${PG_DATABASE}" \
+      --format=custom \
+      --no-acl \
+      --no-owner \
+      --verbose \
+      2>/tmp/pg_dump.log | gzip > "/tmp/${BACKUP_FILE}"
+
+    if [ $? -ne 0 ]; then
+      echo "[$(date)] ERROR: pg_dump failed. Check /tmp/pg_dump.log"
+      exit 1
+    fi
+
+    BACKUP_SIZE=$(du -h "/tmp/${BACKUP_FILE}" | cut -f1)
+    echo "[$(date)] Backup created: ${BACKUP_FILE} (${BACKUP_SIZE})"
+
+    # Upload to S3
+    aws s3 cp "/tmp/${BACKUP_FILE}" "${S3_PATH}" \
+      --storage-class STANDARD_IA \
+      --server-side-encryption AES256
+
+    if [ $? -ne 0 ]; then
+      echo "[$(date)] ERROR: S3 upload failed"
+      exit 1
+    fi
+
+    echo "[$(date)] Backup uploaded to ${S3_PATH}"
+
+    # Verify backup by listing
+    aws s3 ls "${S3_PATH}"
+    echo "[$(date)] Backup verified successfully"
+
+    # Cleanup local file
+    rm -f "/tmp/${BACKUP_FILE}"
+
+    # Cleanup old backups (retention policy)
+    echo "[$(date)] Cleaning up backups older than ${BACKUP_RETENTION_DAYS} days..."
+    aws s3 ls "s3://${S3_BUCKET}/postgresql/" | \
+      awk '{print $4}' | \
+      while read -r OLD_FILE; do
+        aws s3 rm "s3://${S3_BUCKET}/postgresql/${OLD_FILE}" \
+          --exclude "*" --include "fis-db-backup-*"
+      done 2>/dev/null || true
+
+    echo "[$(date)] Backup completed successfully"
+---
+# --- Backup CronJob ---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: fis-production
+  labels:
+    app: postgres-backup
+    environment: production
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 3600  # 1 hour timeout
+      ttlSecondsAfterFinished: 86400  # Clean up after 24 hours
+      template:
+        metadata:
+          labels:
+            app: postgres-backup
+            environment: production
+        spec:
+          serviceAccountName: postgres-backup-sa
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+          containers:
+            - name: postgres-backup
+              image: postgres:17-alpine
+              command: ["/bin/sh", "/scripts/backup.sh"]
+              envFrom:
+                - configMapRef:
+                    name: postgres-backup-config
+                - secretRef:
+                    name: postgres-secret
+              env:
+                - name: PG_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: POSTGRES_PASSWORD
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    configMapKeyRef:
+                      name: postgres-backup-config
+                      key: S3_REGION
+                - name: S3_BUCKET
+                  valueFrom:
+                    configMapKeyRef:
+                      name: postgres-backup-config
+                      key: S3_BUCKET
+                - name: BACKUP_RETENTION_DAYS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: postgres-backup-config
+                      key: BACKUP_RETENTION_DAYS
+              volumeMounts:
+                - name: backup-scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: "250m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "1"
+                  memory: "1Gi"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: backup-scripts
+              configMap:
+                name: postgres-backup-config
+                defaultMode: 0755
+                items:
+                  - key: BACKUP_SCRIPT
+                    path: backup.sh
+            - name: tmp
+              emptyDir:
+                medium: Memory
+                sizeLimit: 2Gi

@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.domain.enums.PeriodStatus;
 import com.bracit.fisprocess.dto.request.CreateAccountingPeriodRequestDto;
 import com.bracit.fisprocess.dto.request.PeriodStatusChangeRequestDto;
@@ -26,6 +27,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/accounting-periods")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class AccountingPeriodController {
 
     private final AccountingPeriodService accountingPeriodService;

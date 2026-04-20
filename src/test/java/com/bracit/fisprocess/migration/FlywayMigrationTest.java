@@ -1,6 +1,6 @@
 package com.bracit.fisprocess.migration;
 
-import com.bracit.fisprocess.AbstractIntegrationTest;
+import com.bracit.fisprocess.TestcontainersIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,7 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  */
 @SpringBootTest
 @DisplayName("Flyway Migration Integration Tests")
-class FlywayMigrationTest extends AbstractIntegrationTest {
+class FlywayMigrationTest extends TestcontainersIntegrationTest {
 
     @Test
     @DisplayName("All Flyway migrations execute successfully and Hibernate validates schema")

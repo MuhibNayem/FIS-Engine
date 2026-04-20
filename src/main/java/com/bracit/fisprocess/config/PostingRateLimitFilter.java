@@ -21,7 +21,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * Redis-backed distributed rate limiter for high-risk posting endpoints.
+ * Redis-backed distributed rate limiter for high-risk posting endpoints
+ * and expensive report generation endpoints.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
@@ -53,6 +54,9 @@ public class PostingRateLimitFilter extends OncePerRequestFilter {
     @Value("${fis.rate-limit.fail-open:true}")
     private boolean failOpen;
 
+    @Value("${fis.rate-limit.read-requests-per-window:120}")
+    private int readRequestsPerWindow;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -76,14 +80,24 @@ public class PostingRateLimitFilter extends OncePerRequestFilter {
     }
 
     private boolean isTargetedPath(HttpServletRequest request) {
-        if (!HttpMethod.POST.matches(request.getMethod())) {
-            return false;
+        String method = request.getMethod();
+
+        // POST endpoints: high-risk mutation operations
+        if (HttpMethod.POST.matches(method)) {
+            String path = request.getRequestURI();
+            return path.startsWith("/v1/events")
+                    || path.startsWith("/v1/journal-entries")
+                    || path.startsWith("/v1/settlements")
+                    || path.startsWith("/v1/revaluations");
         }
-        String path = request.getRequestURI();
-        return path.startsWith("/v1/events")
-                || path.startsWith("/v1/journal-entries")
-                || path.startsWith("/v1/settlements")
-                || path.startsWith("/v1/revaluations");
+
+        // GET endpoints: expensive report generation queries
+        if (HttpMethod.GET.matches(method)) {
+            String path = request.getRequestURI();
+            return path.startsWith("/v1/reports/");
+        }
+
+        return false;
     }
 
     private String rateLimitKey(HttpServletRequest request) {
@@ -97,7 +111,13 @@ public class PostingRateLimitFilter extends OncePerRequestFilter {
     private boolean isRateLimited(HttpServletRequest request) {
         long nowEpochSeconds = System.currentTimeMillis() / 1000;
         long windowStart = nowEpochSeconds - (nowEpochSeconds % windowSeconds);
-        String key = "fis:rate-limit:" + rateLimitKey(request) + ":" + windowStart;
+
+        // Use different limits for read vs write endpoints
+        boolean isWriteOperation = HttpMethod.POST.matches(request.getMethod());
+        int limit = isWriteOperation ? requestsPerWindow : readRequestsPerWindow;
+        String endpointType = isWriteOperation ? "write" : "read";
+
+        String key = "fis:rate-limit:" + endpointType + ":" + rateLimitKey(request) + ":" + windowStart;
 
         try {
             Long currentCount = redisTemplate.execute(
@@ -108,7 +128,7 @@ public class PostingRateLimitFilter extends OncePerRequestFilter {
                 log.warn("Redis rate limit script returned null for key='{}'; failOpen={}", key, failOpen);
                 return !failOpen;
             }
-            return currentCount > requestsPerWindow;
+            return currentCount > limit;
         } catch (RuntimeException ex) {
             log.warn("Redis rate limiter unavailable for key='{}'; failOpen={}", key, failOpen, ex);
             return !failOpen;

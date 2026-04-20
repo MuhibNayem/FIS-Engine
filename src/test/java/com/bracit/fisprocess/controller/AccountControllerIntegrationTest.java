@@ -1,6 +1,6 @@
 package com.bracit.fisprocess.controller;
 
-import com.bracit.fisprocess.AbstractIntegrationTest;
+import com.bracit.fisprocess.H2IntegrationTest;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.enums.AccountType;
 import com.bracit.fisprocess.dto.request.CreateAccountRequestDto;
@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("AccountController Integration Tests")
-class AccountControllerIntegrationTest extends AbstractIntegrationTest {
+class AccountControllerIntegrationTest extends H2IntegrationTest {
 
         @Autowired
         private MockMvc mockMvc;

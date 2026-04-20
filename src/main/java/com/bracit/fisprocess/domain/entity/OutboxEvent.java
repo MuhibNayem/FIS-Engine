@@ -67,6 +67,37 @@ public class OutboxEvent {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    /**
+     * Number of publish attempts for this event.
+     * Incremented on each failed relay attempt.
+     */
+    @Column(name = "retry_count", nullable = false)
+    @Builder.Default
+    private int retryCount = 0;
+
+    /**
+     * Maximum number of retry attempts before the event is moved to DLQ.
+     */
+    @Column(name = "max_retries", nullable = false)
+    @Builder.Default
+    private int maxRetries = 50;
+
+    /**
+     * Indicates whether this event has been moved to the dead letter queue
+     * after exhausting all retry attempts.
+     */
+    @Column(name = "dlq", nullable = false)
+    @Builder.Default
+    private boolean dlq = false;
+
+    /**
+     * Last error message from a failed publish attempt.
+     * Truncated to 2048 characters to prevent excessive storage.
+     */
+    @Nullable
+    @Column(name = "last_error", length = 2048)
+    private String lastError;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

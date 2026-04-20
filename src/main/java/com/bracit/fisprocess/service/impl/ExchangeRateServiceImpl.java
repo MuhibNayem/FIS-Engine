@@ -9,6 +9,8 @@ import com.bracit.fisprocess.repository.ExchangeRateRepository;
 import com.bracit.fisprocess.service.ExchangeRateService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,7 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "exchangeRates", allEntries = true)  // Evict all rates on batch upload to ensure consistency
     public List<ExchangeRateResponseDto> upload(UUID tenantId, ExchangeRateUploadDto request) {
         List<ExchangeRate> saved = request.getRates().stream()
                 .map(rate -> upsert(tenantId, rate))
@@ -46,6 +49,9 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "exchangeRates",
+            key = "#tenantId.toString() + ':' + #sourceCurrency.toUpperCase(Locale.ROOT) + ':' + #targetCurrency.toUpperCase(Locale.ROOT) + ':' + #effectiveDate",
+            unless = "#result == null")
     public BigDecimal resolveRate(UUID tenantId, String sourceCurrency, String targetCurrency, LocalDate effectiveDate) {
         String source = normalizeCurrency(sourceCurrency);
         String target = normalizeCurrency(targetCurrency);

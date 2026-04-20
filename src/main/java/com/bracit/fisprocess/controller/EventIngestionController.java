@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.dto.request.FinancialEventRequestDto;
 import com.bracit.fisprocess.dto.response.EventIngestionResponseDto;
 import com.bracit.fisprocess.service.FinancialEventIngestionService;
@@ -22,6 +23,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/events")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class EventIngestionController {
 
     private final FinancialEventIngestionService ingestionService;

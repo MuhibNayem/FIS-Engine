@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.dto.request.YearEndCloseRequestDto;
 import com.bracit.fisprocess.dto.response.LedgerIntegrityCheckResponseDto;
 import com.bracit.fisprocess.dto.response.YearEndCloseResponseDto;
@@ -20,6 +21,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/admin")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class AdminIntegrityController {
 
     private final LedgerIntegrityService ledgerIntegrityService;

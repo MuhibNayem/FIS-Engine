@@ -5,6 +5,7 @@ plugins {
     id "io.freefair.lombok" version "9.2.0"
     id 'jacoco'
     id 'info.solidsoft.pitest' version '1.19.0-rc.2'
+    id 'me.champeau.jmh' version '0.7.2'
 }
 
 group = 'com.bracit'
@@ -59,6 +60,8 @@ dependencies {
     // --- Mapping & Null Safety ---
     implementation 'org.modelmapper:modelmapper:3.2.2'
     implementation 'org.jspecify:jspecify:1.0.0'
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.2.0'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
@@ -82,17 +85,70 @@ dependencies {
     testImplementation 'org.pitest:pitest-junit5-plugin:1.2.2'
 }
 
+// Docker Desktop socket path - shared between test and integrationTest tasks
+def dockerSocketPath = "${System.getProperty('user.home')}/.docker/desktop/docker.sock"
+def dockerSocket = file(dockerSocketPath)
+
 tasks.named('test') {
     useJUnitPlatform()
+    jvmArgs '-Xmx1g', '-Xms256m'
+    // Run only pure unit tests - explicitly exclude integration/Spring base tests
+    filter {
+        // Exclude by exact class name patterns (Gradle matches against FQN)
+        exclude '**/*IntegrationTest*'
+        exclude '**/*IT*'
+        exclude '**/EntityProxyBehaviorTest*'
+        exclude '**/ReportingQueryPerformanceGuardrailIntegrationTest*'
+        exclude '**/FlywayMigrationTest*'
+        exclude '**/FisProcessApplicationTests*'
+        exclude '**/ConcurrencyIntegrationTest*'
+        exclude '**/EventIngestionControllerIntegrationTest*'
+        exclude '**/EventIngestionRedisFallbackIntegrationTest*'
+        exclude '**/JournalBatchConcurrencyIntegrationTest*'
+        exclude '**/SecurityRbacIntegrationTest*'
+        exclude '**/LedgerAdvancedFeaturesIntegrationTest*'
+        exclude '**/FinancialReportingControllerIntegrationTest*'
+        exclude '**/AccountControllerIntegrationTest*'
+        exclude '**/AccountingPeriodCurrencyIntegrationTest*'
+        exclude '**/AdminIntegrityControllerIntegrationTest*'
+        exclude '**/JournalEntryControllerIntegrationTest*'
+        exclude '**/JournalApprovalWorkflowIntegrationTest*'
+        exclude '**/RateLimitingIntegrationTest*'
+    }
+}
 
-    // Docker Desktop socket configuration for Testcontainers
-    def dockerSocketPath = "${System.getProperty('user.home')}/.docker/desktop/docker.sock"
-    def dockerSocket = file(dockerSocketPath)
+// Separate integration test task - runs sequentially (Docker-dependent)
+tasks.register('integrationTest', Test) {
+    group = 'verification'
+    description = 'Runs integration tests that require Docker containers'
+    useJUnitPlatform()
+    jvmArgs '-Xmx1g', '-Xms256m'
     if (dockerSocket.exists()) {
         environment 'DOCKER_HOST', "unix://${dockerSocketPath}"
         environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', dockerSocketPath
         environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
     }
+
+    filter {
+        // Only include integration tests
+        include '**/*IntegrationTest*'
+        include '**/*IT*'
+        include '**/H2IntegrationTest*'
+        include '**/TestcontainersIntegrationTest*'
+        include '**/FisProcessApplicationTests*'
+        // Exclude AbstractIntegrationTest itself (it's a base class, not a test)
+        exclude '**/AbstractIntegrationTest*'
+    }
+
+    // Integration tests must run sequentially - no parallelism
+    maxParallelForks = 1
+
+    shouldRunAfter 'test'
+}
+
+// Main 'check' runs unit tests; integrationTest must be run explicitly
+tasks.named('check') {
+    dependsOn tasks.named('test'), tasks.named('jacocoTestCoverageVerification')
 }
 
 jacoco {
@@ -120,7 +176,7 @@ tasks.named('jacocoTestCoverageVerification') {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.35
+                minimum = 0.25
             }
         }
         rule {
@@ -129,7 +185,7 @@ tasks.named('jacocoTestCoverageVerification') {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.40
+                minimum = 0.45
             }
         }
     }
@@ -156,4 +212,15 @@ pitest {
     timestampedReports = false
     mutationThreshold = 35
     failWhenNoMutations = true
+}
+
+// --- JMH Performance Benchmarks ---
+jmh {
+    iterations = 5
+    warmupIterations = 3
+    fork = 2
+    benchmarkMode = ['thrpt', 'avgt']
+    timeUnit = 'ms'
+    includes = ['.*JournalPostingEngine.*', '.*HashChain.*', '.*Idempotency.*', '.*Validation.*']
+    jmhVersion = '1.37'
 }

@@ -76,9 +76,16 @@ fis:
   outbox:
     relay-delay-ms: ${FIS_OUTBOX_RELAY_DELAY_MS:1000}
     retention-days: ${FIS_OUTBOX_RETENTION_DAYS:30}
+    max-retries: ${FIS_OUTBOX_MAX_RETRIES:50}
     alert:
-      retry-streak-threshold: ${FIS_OUTBOX_ALERT_RETRY_STREAK_THRESHOLD:5}
-      oldest-unpublished-seconds: ${FIS_OUTBOX_ALERT_OLDEST_UNPUBLISHED_SECONDS:300}
+      check-interval-ms: ${FIS_OUTBOX_ALERT_CHECK_INTERVAL_MS:60000}
+      backlog-warning: ${FIS_OUTBOX_ALERT_BACKLOG_WARNING:1000}
+      oldest-warning-seconds: ${FIS_OUTBOX_ALERT_OLDEST_WARNING_SECONDS:300}
+      dlq-critical: ${FIS_OUTBOX_ALERT_DLQ_CRITICAL:100}
+      retry-streak-warning: ${FIS_OUTBOX_ALERT_RETRY_STREAK_WARNING:10}
+  idempotency:
+    retention-days: ${FIS_IDEMPOTENCY_RETENTION_DAYS:7}
+    cleanup-cron: ${FIS_IDEMPOTENCY_CLEANUP_CRON:0 0 3 * * *}
   revaluation:
     reserve-account-code: ${FIS_REVAL_RESERVE_ACCOUNT:FX_REVAL_RESERVE}
     gain-account-code: ${FIS_REVAL_GAIN_ACCOUNT:FX_UNREALIZED_GAIN}
@@ -102,6 +109,7 @@ fis:
     enabled: ${FIS_RATE_LIMIT_ENABLED:false}
     window-seconds: ${FIS_RATE_LIMIT_WINDOW_SECONDS:1}
     requests-per-window: ${FIS_RATE_LIMIT_REQUESTS_PER_WINDOW:60}
+    read-requests-per-window: ${FIS_RATE_LIMIT_READ_REQUESTS_PER_WINDOW:120}
     fail-open: ${FIS_RATE_LIMIT_FAIL_OPEN:true}
 
 # --- Actuator ---
@@ -214,7 +222,7 @@ spring:
   data:
     redis:
       ssl:
-        enabled: ${REDIS_SSL_ENABLED:true}
+        enabled: ${REDIS_SSL_ENABLED:false}
 
 fis:
   rate-limit:

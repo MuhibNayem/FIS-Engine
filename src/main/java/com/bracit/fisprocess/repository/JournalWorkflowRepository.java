@@ -1,8 +1,10 @@
 package com.bracit.fisprocess.repository;
 
 import com.bracit.fisprocess.domain.entity.JournalWorkflow;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,6 +18,20 @@ public interface JournalWorkflowRepository extends JpaRepository<JournalWorkflow
 
     @EntityGraph(attributePaths = "lines")
     Optional<JournalWorkflow> findWithLinesByTenantIdAndWorkflowId(UUID tenantId, UUID workflowId);
+
+    /**
+     * Retrieves workflow with lines and acquires a pessimistic write lock
+     * to prevent concurrent approval/rejection race conditions.
+     */
+    @EntityGraph(attributePaths = "lines")
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT jw FROM JournalWorkflow jw
+            WHERE jw.tenantId = :tenantId AND jw.workflowId = :workflowId
+            """)
+    Optional<JournalWorkflow> findWithLinesForUpdate(
+            @Param("tenantId") UUID tenantId,
+            @Param("workflowId") UUID workflowId);
 
     boolean existsByTenantIdAndEventId(UUID tenantId, String eventId);
 

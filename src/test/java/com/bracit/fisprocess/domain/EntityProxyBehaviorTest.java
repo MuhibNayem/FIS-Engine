@@ -1,6 +1,6 @@
 package com.bracit.fisprocess.domain;
 
-import com.bracit.fisprocess.AbstractIntegrationTest;
+import com.bracit.fisprocess.H2IntegrationTest;
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
 import com.bracit.fisprocess.domain.enums.AccountType;
@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @Transactional
 @DisplayName("Entity Proxy Behavior Tests")
-class EntityProxyBehaviorTest extends AbstractIntegrationTest {
+class EntityProxyBehaviorTest extends H2IntegrationTest {
 
     @Autowired
     private AccountRepository accountRepository;

@@ -1,0 +1,390 @@
+# --- Redis StorageClass ---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: redis-gp3
+  labels:
+    app: redis
+    environment: production
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+  encrypted: "true"
+  iops: "3000"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+# --- Redis ConfigMap ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: fis-production
+  labels:
+    app: redis
+    environment: production
+data:
+  redis.conf: |
+    # --- Network ---
+    bind 0.0.0.0
+    port 6379
+    tcp-backlog 511
+    timeout 300
+    tcp-keepalive 60
+
+    # --- General ---
+    daemonize no
+    supervised no
+    loglevel notice
+    databases 16
+
+    # --- Snapshotting ---
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+
+    # --- Memory ---
+    maxmemory 2gb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 10
+
+    # --- Append Only File ---
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+
+    # --- Security ---
+    requirepass <REDIS_PASSWORD>
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    rename-command DEBUG ""
+
+    # --- Replication ---
+    replica-serve-stale-data yes
+    replica-read-only yes
+    repl-diskless-sync no
+    repl-backlog-size 64mb
+    repl-backlog-ttl 3600
+
+    # --- Slow Log ---
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+    # --- Latency Monitor ---
+    latency-monitor-threshold 100
+---
+# --- Redis Service (primary) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-primary
+  namespace: fis-production
+  labels:
+    app: redis
+    role: primary
+    environment: production
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+  selector:
+    app: redis
+    role: primary
+---
+# --- Redis Service (replicas) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-replica
+  namespace: fis-production
+  labels:
+    app: redis
+    role: replica
+    environment: production
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+  selector:
+    app: redis
+    role: replica
+---
+# --- Redis Headless Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: fis-production
+  labels:
+    app: redis
+    environment: production
+spec:
+  clusterIP: None
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+  selector:
+    app: redis
+  publishNotReadyAddresses: true
+---
+# --- Redis Primary StatefulSet ---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-primary
+  namespace: fis-production
+  labels:
+    app: redis
+    role: primary
+    environment: production
+spec:
+  serviceName: redis-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: primary
+        environment: production
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - redis-server
+            - /etc/redis/redis.conf
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 15
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: redis-config-volume
+              mountPath: /etc/redis
+              readOnly: true
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: REDIS_PASSWORD
+      volumes:
+        - name: redis-config-volume
+          configMap:
+            name: redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+        labels:
+          app: redis
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: redis-gp3
+        resources:
+          requests:
+            storage: 10Gi
+---
+# --- Redis Replica StatefulSet ---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-replica
+  namespace: fis-production
+  labels:
+    app: redis
+    role: replica
+    environment: production
+spec:
+  serviceName: redis-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: redis
+      role: replica
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: replica
+        environment: production
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - redis-server
+            - /etc/redis/redis.conf
+            - --replicaof
+            - redis-primary-0.redis-headless.fis-production.svc.cluster.local
+            - "6379"
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: redis-config-volume
+              mountPath: /etc/redis
+              readOnly: true
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: REDIS_PASSWORD
+      volumes:
+        - name: redis-config-volume
+          configMap:
+            name: redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+        labels:
+          app: redis
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: redis-gp3
+        resources:
+          requests:
+            storage: 10Gi
+---
+# --- Redis Secret Template ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: fis-production
+  labels:
+    app: redis
+    environment: production
+type: Opaque
+stringData:
+  REDIS_PASSWORD: "<REDIS_PASSWORD>"
+---
+# --- Redis PodDisruptionBudget ---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-primary-pdb
+  namespace: fis-production
+  labels:
+    app: redis
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: redis
+      role: primary
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-replica-pdb
+  namespace: fis-production
+  labels:
+    app: redis
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: replica

@@ -63,7 +63,8 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
                 // Precompute immutable identity fields so the row is insert-only.
                 UUID journalEntryId = UUID.randomUUID();
                 OffsetDateTime createdAt = OffsetDateTime.now();
-                String hash = hashChainService.computeHash(journalEntryId, previousHash, createdAt);
+                // Hash now includes journal line content for tamper detection
+                String hash = hashChainService.computeHash(journalEntryId, previousHash, createdAt, draft.getLines());
 
                 // 2. Build the JournalEntry entity
                 JournalEntry journalEntry = JournalEntry.builder()
@@ -136,6 +137,10 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
          * Updates account balances with deterministic lock ordering (sorted by account
          * code)
          * to prevent deadlocks under concurrent multi-account postings.
+         * <p>
+         * CRITICAL: Uses base-currency amounts (baseAmountCents) to ensure account
+         * balances are tracked in a consistent currency. Using transaction currency
+         * amounts would corrupt balances in multi-currency scenarios.
          */
         private void updateAccountBalances(DraftJournalEntry draft) {
                 // Sort lines by account code for deterministic lock ordering
@@ -148,8 +153,13 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
                                         .findByTenantIdAndCode(draft.getTenantId(), line.getAccountCode())
                                         .orElseThrow(() -> new AccountNotFoundException(line.getAccountCode()));
 
+                        // Use base-currency amount for balance consistency across currencies
+                        long baseAmountCents = line.getBaseAmountCents() != null
+                                        ? line.getBaseAmountCents()
+                                        : line.getAmountCents();
+
                         long delta = computeBalanceDelta(account.getAccountType(), account.isContra(),
-                                        line.getAmountCents(), line.isCredit());
+                                        baseAmountCents, line.isCredit());
                         ledgerLockingService.updateAccountBalance(account.getAccountId(), delta);
                 }
         }

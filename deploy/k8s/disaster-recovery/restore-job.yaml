@@ -1,0 +1,181 @@
+# --- PostgreSQL Restore Job (Manual Trigger) ---
+# Usage:
+#   1. Edit the BACKUP_FILE env var to point to the desired backup
+#   2. Apply: kubectl apply -f deploy/k8s/disaster-recovery/restore-job.yaml
+#   3. Monitor: kubectl logs -f job/postgres-restore -n fis-production
+#
+# WARNING: This will DROP and recreate all tables. Use only for disaster recovery.
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-restore
+  namespace: fis-production
+  labels:
+    app: postgres-restore
+    environment: production
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 604800  # 7 days
+  template:
+    metadata:
+      labels:
+        app: postgres-restore
+        environment: production
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+      containers:
+        - name: postgres-restore
+          image: postgres:17-alpine
+          command: ["/bin/sh", "/scripts/restore.sh"]
+          env:
+            - name: BACKUP_FILE
+              value: "fis-db-backup-20260412T020000Z.sql.gz"  # <-- EDIT THIS
+            - name: S3_BUCKET
+              value: "fis-engine-backups"
+            - name: S3_REGION
+              value: "us-east-1"
+            - name: PG_HOST
+              value: "postgres-primary"
+            - name: PG_PORT
+              value: "5432"
+            - name: PG_DATABASE
+              value: "fis"
+            - name: PG_USERNAME
+              value: "fis"
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+          volumeMounts:
+            - name: restore-scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: restore-scripts
+          configMap:
+            name: postgres-restore-config
+            defaultMode: 0755
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
+---
+# --- Restore Script ConfigMap ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-restore-config
+  namespace: fis-production
+  labels:
+    app: postgres-restore
+    environment: production
+data:
+  restore.sh: |
+    #!/bin/sh
+    set -euo pipefail
+
+    echo "[$(date)] Starting PostgreSQL restore from: ${BACKUP_FILE}"
+
+    S3_PATH="s3://${S3_BUCKET}/postgresql/${BACKUP_FILE}"
+    LOCAL_FILE="/tmp/${BACKUP_FILE}"
+
+    # Download backup from S3
+    echo "[$(date)] Downloading backup from S3..."
+    aws s3 cp "${S3_PATH}" "${LOCAL_FILE}"
+
+    if [ $? -ne 0 ]; then
+      echo "[$(date)] ERROR: Failed to download backup from ${S3_PATH}"
+      exit 1
+    fi
+
+    BACKUP_SIZE=$(du -h "${LOCAL_FILE}" | cut -f1)
+    echo "[$(date)] Downloaded: ${BACKUP_SIZE}"
+
+    # Terminate existing connections
+    echo "[$(date)] Terminating existing connections..."
+    PGPASSWORD="${PG_PASSWORD}" psql \
+      -h "${PG_HOST}" \
+      -p "${PG_PORT}" \
+      -U "${PG_USERNAME}" \
+      -d postgres \
+      -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${PG_DATABASE}' AND pid != pg_backend_pid();"
+
+    # Drop and recreate the database
+    echo "[$(date)] Dropping database '${PG_DATABASE}'..."
+    PGPASSWORD="${PG_PASSWORD}" psql \
+      -h "${PG_HOST}" \
+      -p "${PG_PORT}" \
+      -U "${PG_USERNAME}" \
+      -d postgres \
+      -c "DROP DATABASE IF EXISTS ${PG_DATABASE};"
+
+    echo "[$(date)] Creating database '${PG_DATABASE}'..."
+    PGPASSWORD="${PG_PASSWORD}" psql \
+      -h "${PG_HOST}" \
+      -p "${PG_PORT}" \
+      -U "${PG_USERNAME}" \
+      -d postgres \
+      -c "CREATE DATABASE ${PG_DATABASE};"
+
+    # Restore
+    echo "[$(date)] Restoring database from backup..."
+    gunzip -c "${LOCAL_FILE}" | PGPASSWORD="${PG_PASSWORD}" pg_restore \
+      -h "${PG_HOST}" \
+      -p "${PG_PORT}" \
+      -U "${PG_USERNAME}" \
+      -d "${PG_DATABASE}" \
+      --no-acl \
+      --no-owner \
+      --verbose \
+      2>/tmp/pg_restore.log
+
+    if [ $? -ne 0 ]; then
+      echo "[$(date)] ERROR: Restore failed. Check /tmp/pg_restore.log"
+      exit 1
+    fi
+
+    # Run ANALYZE to update statistics
+    echo "[$(date)] Running ANALYZE..."
+    PGPASSWORD="${PG_PASSWORD}" psql \
+      -h "${PG_HOST}" \
+      -p "${PG_PORT}" \
+      -U "${PG_USERNAME}" \
+      -d "${PG_DATABASE}" \
+      -c "ANALYZE;"
+
+    # Verify
+    TABLE_COUNT=$(PGPASSWORD="${PG_PASSWORD}" psql \
+      -h "${PG_HOST}" \
+      -p "${PG_PORT}" \
+      -U "${PG_USERNAME}" \
+      -d "${PG_DATABASE}" \
+      -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d ' ')
+
+    echo "[$(date)] Restore completed. Tables restored: ${TABLE_COUNT}"
+
+    # Cleanup
+    rm -f "${LOCAL_FILE}"
+    echo "[$(date)] Restore finished successfully at $(date -u +"%Y%m%dT%H%M%SZ")"

@@ -141,13 +141,15 @@ public class JournalWorkflowServiceImpl implements JournalWorkflowService {
             UUID workflowId,
             ApproveWorkflowRequestDto request,
             @Nullable String actorRoleHeader) {
-        JournalWorkflow workflow = journalWorkflowRepository.findWithLinesByTenantIdAndWorkflowId(tenantId, workflowId)
+        // Use pessimistic lock to prevent concurrent approval race conditions
+        JournalWorkflow workflow = journalWorkflowRepository.findWithLinesForUpdate(tenantId, workflowId)
                 .orElseThrow(() -> new JournalWorkflowNotFoundException(workflowId));
 
         if (workflow.getStatus() != JournalWorkflowStatus.PENDING_APPROVAL) {
             throw new InvalidWorkflowStateException("Only PENDING_APPROVAL workflow entries can be approved.");
         }
-        if (request.getApprovedBy().equalsIgnoreCase(workflow.getCreatedBy())) {
+        // Use normalized comparison to prevent Unicode spoofing attacks
+        if (request.getApprovedBy().trim().equalsIgnoreCase(workflow.getCreatedBy().trim())) {
             throw new ApprovalViolationException("Maker-checker violation: approver cannot be the creator.");
         }
 

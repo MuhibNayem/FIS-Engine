@@ -1,0 +1,6 @@
+package com.bracit.fisprocess.exception;
+import org.springframework.http.HttpStatus;
+import java.util.UUID;
+public class ReconciliationNotFoundException extends FisBusinessException {
+    public ReconciliationNotFoundException(UUID id) { super(HttpStatus.NOT_FOUND, "reconciliation not found: " + id, "/problems/reconciliation-not-found"); }
+}

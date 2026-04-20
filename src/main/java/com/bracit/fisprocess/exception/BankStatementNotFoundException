@@ -1,0 +1,6 @@
+package com.bracit.fisprocess.exception;
+import org.springframework.http.HttpStatus;
+import java.util.UUID;
+public class BankStatementNotFoundException extends FisBusinessException {
+    public BankStatementNotFoundException(UUID id) { super(HttpStatus.NOT_FOUND, "bank statement not found: " + id, "/problems/bank statement-not-found"); }
+}

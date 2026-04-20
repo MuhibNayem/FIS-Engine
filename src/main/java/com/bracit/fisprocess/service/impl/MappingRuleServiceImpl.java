@@ -17,6 +17,7 @@ import com.bracit.fisprocess.service.MappingRuleService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +42,7 @@ public class MappingRuleServiceImpl implements MappingRuleService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "mappingRules", allEntries = true)  // Evict all rules on create to ensure eventType uniqueness
     public MappingRuleResponseDto create(UUID tenantId, CreateMappingRuleRequestDto request) {
         MappingRule rule = modelMapper.map(request, MappingRule.class);
         rule.setTenantId(tenantId);
@@ -72,6 +74,7 @@ public class MappingRuleServiceImpl implements MappingRuleService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "mappingRules", allEntries = true)  // Evict all rules on update as eventType may have changed
     public MappingRuleResponseDto update(UUID tenantId, UUID ruleId, UpdateMappingRuleRequestDto request) {
         MappingRule rule = mappingRuleRepository.findByTenantIdAndId(tenantId, ruleId)
                 .orElseThrow(() -> new MappingRuleNotFoundException(ruleId));
@@ -102,6 +105,7 @@ public class MappingRuleServiceImpl implements MappingRuleService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "mappingRules", allEntries = true)  // Evict all rules on deactivate as rule is now inactive
     public void deactivate(UUID tenantId, UUID ruleId, String performedBy) {
         MappingRule rule = mappingRuleRepository.findByTenantIdAndId(tenantId, ruleId)
                 .orElseThrow(() -> new MappingRuleNotFoundException(ruleId));

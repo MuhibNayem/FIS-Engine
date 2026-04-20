@@ -1,6 +1,6 @@
 package com.bracit.fisprocess.controller;
 
-import com.bracit.fisprocess.AbstractIntegrationTest;
+import com.bracit.fisprocess.H2IntegrationTest;
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.AccountingPeriod;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = "fis.approval.threshold-cents=10000")
 @AutoConfigureMockMvc
 @DisplayName("Journal Approval Workflow Integration Tests")
-class JournalApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
+class JournalApprovalWorkflowIntegrationTest extends H2IntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

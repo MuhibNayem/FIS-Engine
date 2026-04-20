@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.dto.request.CreateMappingRuleRequestDto;
 import com.bracit.fisprocess.dto.request.UpdateMappingRuleRequestDto;
 import com.bracit.fisprocess.dto.response.MappingRuleResponseDto;
@@ -27,6 +28,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/mapping-rules")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class MappingRuleController {
 
     private final MappingRuleService mappingRuleService;

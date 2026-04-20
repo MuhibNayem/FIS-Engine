@@ -1,6 +1,6 @@
 package com.bracit.fisprocess.controller;
 
-import com.bracit.fisprocess.AbstractIntegrationTest;
+import com.bracit.fisprocess.H2IntegrationTest;
 import com.bracit.fisprocess.domain.entity.Account;
 import com.bracit.fisprocess.domain.entity.AccountingPeriod;
 import com.bracit.fisprocess.domain.entity.BusinessEntity;
@@ -46,7 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @DisplayName("JournalEntryController Integration Tests")
-class JournalEntryControllerIntegrationTest extends AbstractIntegrationTest {
+class JournalEntryControllerIntegrationTest extends H2IntegrationTest {
 
         @Autowired
         private MockMvc mockMvc;

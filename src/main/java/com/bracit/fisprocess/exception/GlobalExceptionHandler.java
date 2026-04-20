@@ -95,15 +95,37 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     /**
      * Handles argument validation errors thrown from service-layer guards.
+     * <p>
+     * Sanitizes error messages to prevent leaking internal details
+     * like SQL constraints, stack traces, or internal IDs.
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException ex) {
+        String message = ex.getMessage();
+        // Sanitize: prevent leakage of internal details
+        String safeMessage = sanitizeErrorMessage(message);
+
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
                 HttpStatusCode.valueOf(400),
-                ex.getMessage() == null ? "Invalid request." : ex.getMessage());
+                safeMessage);
         problemDetail.setType(URI.create("/problems/validation-failed"));
         problemDetail.setTitle("Validation Failed");
         return ResponseEntity.badRequest().body(problemDetail);
+    }
+
+    /**
+     * Handles unexpected runtime exceptions while sanitizing error details
+     * to prevent information leakage.
+     */
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ProblemDetail> handleUnexpectedRuntimeException(RuntimeException ex) {
+        log.error("Unexpected runtime exception", ex);
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatusCode.valueOf(500),
+                "An unexpected internal error occurred.");
+        problemDetail.setType(URI.create("/problems/internal-error"));
+        problemDetail.setTitle("Internal Server Error");
+        return ResponseEntity.internalServerError().body(problemDetail);
     }
 
     /**
@@ -118,5 +140,33 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problemDetail.setType(URI.create("/problems/internal-error"));
         problemDetail.setTitle("Internal Server Error");
         return ResponseEntity.internalServerError().body(problemDetail);
+    }
+
+    /**
+     * Sanitizes error messages to prevent leaking internal details
+     * like SQL constraint names, stack traces, or internal UUIDs.
+     */
+    private String sanitizeErrorMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "Invalid request.";
+        }
+
+        // Truncate overly long messages
+        if (message.length() > 200) {
+            message = message.substring(0, 200) + "...";
+        }
+
+        // Remove common patterns that leak internal details
+        // SQL constraint names
+        message = message.replaceAll("constraint [^\\s]+", "a validation constraint");
+        // Stack traces
+        int stackTraceIndex = message.indexOf("\n\tat ");
+        if (stackTraceIndex > 0) {
+            message = message.substring(0, stackTraceIndex);
+        }
+        // UUIDs (potential internal IDs)
+        message = message.replaceAll("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<internal-id>");
+
+        return message;
     }
 }

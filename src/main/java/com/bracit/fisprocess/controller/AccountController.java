@@ -1,11 +1,14 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.domain.enums.AccountType;
 import com.bracit.fisprocess.dto.request.CreateAccountRequestDto;
 import com.bracit.fisprocess.dto.request.UpdateAccountRequestDto;
 import com.bracit.fisprocess.dto.response.AccountResponseDto;
 import com.bracit.fisprocess.service.AccountService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -34,6 +37,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/accounts")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class AccountController {
 
     private final AccountService accountService;

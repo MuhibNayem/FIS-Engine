@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.convert.converter.Converter;
-import org.springframework.http.HttpMethod;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -25,6 +24,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.RegexRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import java.security.KeyFactory;
 import java.security.PublicKey;
@@ -70,20 +71,48 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health/**", "/actuator/info", "/openapi.yaml", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/v1/admin/**").hasRole("FIS_ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/v1/**").hasAnyRole("FIS_READER", "FIS_ACCOUNTANT", "FIS_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/v1/events", "/v1/journal-entries", "/v1/journal-entries/*/reverse",
-                                "/v1/journal-entries/*/correct", "/v1/journal-entries/*/submit", "/v1/settlements")
+                        .requestMatchers("/actuator/health/**", "/actuator/info", "/openapi.yaml",
+                                "/swagger-ui.html")
+                        .permitAll()
+                        // Version-agnostic admin routes: /v{N}/admin/**
+                        .requestMatchers(new RegexRequestMatcher("^/v\\d+/admin/.*", null))
+                        .hasRole("FIS_ADMIN")
+                        // Version-agnostic GET routes: /v{N}/**
+                        .requestMatchers(methodAndPathMatcher("GET", "^/v\\d+/.*"))
+                        .hasAnyRole("FIS_READER", "FIS_ACCOUNTANT", "FIS_ADMIN")
+                        // Version-agnostic POST routes for write operations
+                        .requestMatchers(methodAndPathMatcher("POST", "^/v\\d+/events$"),
+                                methodAndPathMatcher("POST", "^/v\\d+/journal-entries$"),
+                                methodAndPathMatcher("POST",
+                                    "^/v\\d+/journal-entries/[^/]+/reverse$"),
+                                methodAndPathMatcher("POST",
+                                    "^/v\\d+/journal-entries/[^/]+/correct$"),
+                                methodAndPathMatcher("POST",
+                                    "^/v\\d+/journal-entries/[^/]+/submit$"),
+                                methodAndPathMatcher("POST", "^/v\\d+/settlements$"))
                         .hasAnyRole("FIS_ACCOUNTANT", "FIS_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/v1/journal-entries/*/approve", "/v1/journal-entries/*/reject")
+                        .requestMatchers(
+                                methodAndPathMatcher("POST",
+                                    "^/v\\d+/journal-entries/[^/]+/approve$"),
+                                methodAndPathMatcher("POST",
+                                    "^/v\\d+/journal-entries/[^/]+/reject$"))
                         .hasRole("FIS_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/v1/revaluations/**", "/v1/mapping-rules", "/v1/accounting-periods",
-                                "/v1/exchange-rates", "/v1/accounts")
+                        .requestMatchers(
+                                methodAndPathMatcher("POST", "^/v\\d+/revaluations/.*"),
+                                methodAndPathMatcher("POST", "^/v\\d+/mapping-rules$"),
+                                methodAndPathMatcher("POST", "^/v\\d+/accounting-periods$"),
+                                methodAndPathMatcher("POST", "^/v\\d+/exchange-rates$"),
+                                methodAndPathMatcher("POST", "^/v\\d+/accounts$"))
                         .hasRole("FIS_ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/v1/mapping-rules/**").hasRole("FIS_ADMIN")
-                        .requestMatchers(HttpMethod.PATCH, "/v1/accounting-periods/**", "/v1/accounts/**").hasRole("FIS_ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/v1/mapping-rules/**").hasRole("FIS_ADMIN")
+                        .requestMatchers(methodAndPathMatcher("PUT", "^/v\\d+/mapping-rules/.*"))
+                        .hasRole("FIS_ADMIN")
+                        .requestMatchers(
+                                methodAndPathMatcher("PATCH", "^/v\\d+/accounting-periods/.*"),
+                                methodAndPathMatcher("PATCH", "^/v\\d+/accounts/.*"))
+                        .hasRole("FIS_ADMIN")
+                        .requestMatchers(
+                                methodAndPathMatcher("DELETE", "^/v\\d+/mapping-rules/.*"))
+                        .hasRole("FIS_ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
@@ -140,6 +169,17 @@ public class SecurityConfig {
         }
     }
 
+    /**
+     * Composes an HTTP method check with a regex path matcher since Spring
+     * Security's {@code requestMatchers(HttpMethod, String...)} does not accept
+     * {@link RegexRequestMatcher}.
+     */
+    private static RequestMatcher methodAndPathMatcher(String method, String pathRegex) {
+        RegexRequestMatcher pathMatcher = new RegexRequestMatcher(pathRegex, null);
+        return request -> pathMatcher.matches(request)
+                && method.equalsIgnoreCase(request.getMethod());
+    }
+
     @Bean
     CorsConfigurationSource corsConfigurationSource(
             @Value("${fis.security.cors.allowed-origins:http://localhost:3000,http://localhost:5173}") String allowedOrigins) {
@@ -153,8 +193,21 @@ public class SecurityConfig {
         }
         config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-Id", "X-Actor-Role", "X-Actor-Id", "traceparent"));
-        config.setExposedHeaders(List.of("Retry-After"));
+        config.setAllowedHeaders(List.of(
+            "Authorization",
+            "Content-Type",
+            "X-Tenant-Id",
+            "X-Actor-Role",
+            "X-Actor-Id",
+            "traceparent",
+            "API-Version",
+            "Idempotency-Key"));
+        config.setExposedHeaders(List.of(
+            "Retry-After",
+            "API-Version",
+            "Deprecation",
+            "Sunset",
+            "Link"));
         config.setAllowCredentials(true);
         config.setMaxAge(1800L);
 

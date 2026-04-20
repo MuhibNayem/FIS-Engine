@@ -1,6 +1,6 @@
 package com.bracit.fisprocess.repository;
 
-import com.bracit.fisprocess.AbstractIntegrationTest;
+import com.bracit.fisprocess.TestcontainersIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @DisplayName("Reporting Query Performance Guardrail Integration Tests")
-class ReportingQueryPerformanceGuardrailIntegrationTest extends AbstractIntegrationTest {
+class ReportingQueryPerformanceGuardrailIntegrationTest extends TestcontainersIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;

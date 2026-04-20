@@ -1,6 +1,7 @@
 package com.bracit.fisprocess.service.impl;
 
 import com.bracit.fisprocess.domain.entity.JournalEntry;
+import com.bracit.fisprocess.domain.model.DraftJournalLine;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -60,9 +62,10 @@ class HashChainServiceImplTest {
         UUID id = UUID.fromString("11111111-1111-1111-1111-111111111111");
         String previousHash = "0";
         OffsetDateTime createdAt = OffsetDateTime.parse("2026-01-01T00:00:00Z");
+        List<DraftJournalLine> lines = List.of();
 
-        String hash1 = hashChainService.computeHash(id, previousHash, createdAt);
-        String hash2 = hashChainService.computeHash(id, previousHash, createdAt);
+        String hash1 = hashChainService.computeHash(id, previousHash, createdAt, lines);
+        String hash2 = hashChainService.computeHash(id, previousHash, createdAt, lines);
 
         assertThat(hash1).isNotNull().isNotEmpty();
         assertThat(hash1).isEqualTo(hash2); // deterministic
@@ -74,9 +77,39 @@ class HashChainServiceImplTest {
     void shouldProduceDifferentHashForDifferentInputs() {
         UUID id = UUID.fromString("11111111-1111-1111-1111-111111111111");
         OffsetDateTime createdAt = OffsetDateTime.parse("2026-01-01T00:00:00Z");
+        List<DraftJournalLine> lines = List.of();
 
-        String hash1 = hashChainService.computeHash(id, "0", createdAt);
-        String hash2 = hashChainService.computeHash(id, "different-previous", createdAt);
+        String hash1 = hashChainService.computeHash(id, "0", createdAt, lines);
+        String hash2 = hashChainService.computeHash(id, "different-previous", createdAt, lines);
+
+        assertThat(hash1).isNotEqualTo(hash2);
+    }
+
+    @Test
+    @DisplayName("should produce different hash for different line content")
+    void shouldProduceDifferentHashForDifferentLines() {
+        UUID id = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        String previousHash = "0";
+        OffsetDateTime createdAt = OffsetDateTime.parse("2026-01-01T00:00:00Z");
+
+        List<DraftJournalLine> lines1 = List.of(
+                DraftJournalLine.builder()
+                        .accountCode("CASH")
+                        .amountCents(1000L)
+                        .baseAmountCents(1000L)
+                        .isCredit(false)
+                        .build());
+
+        List<DraftJournalLine> lines2 = List.of(
+                DraftJournalLine.builder()
+                        .accountCode("CASH")
+                        .amountCents(2000L)
+                        .baseAmountCents(2000L)
+                        .isCredit(false)
+                        .build());
+
+        String hash1 = hashChainService.computeHash(id, previousHash, createdAt, lines1);
+        String hash2 = hashChainService.computeHash(id, previousHash, createdAt, lines2);
 
         assertThat(hash1).isNotEqualTo(hash2);
     }

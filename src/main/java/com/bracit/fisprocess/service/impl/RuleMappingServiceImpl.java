@@ -14,6 +14,8 @@ import com.bracit.fisprocess.repository.MappingRuleRepository;
 import com.bracit.fisprocess.service.RuleMappingService;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
@@ -71,9 +73,11 @@ public class RuleMappingServiceImpl implements RuleMappingService {
             return event.getLines().stream().map(this::mapRequestLine).toList();
         }
 
-        MappingRule rule = mappingRuleRepository.findByTenantIdAndEventTypeAndIsActiveTrue(tenantId, event.getEventType())
-                .orElseThrow(() -> new MappingRuleEvaluationException(
-                        "No active mapping rule found for eventType '" + event.getEventType() + "'."));
+        MappingRule rule = findActiveMappingRule(tenantId, event.getEventType());
+        if (rule == null) {
+            throw new MappingRuleEvaluationException(
+                    "No active mapping rule found for eventType '" + event.getEventType() + "'.");
+        }
 
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("event", event);
@@ -88,6 +92,16 @@ public class RuleMappingServiceImpl implements RuleMappingService {
                         .isCredit(line.isCredit())
                         .build())
                 .toList();
+    }
+
+    /**
+     * Finds an active mapping rule for the given tenant and event type.
+     * Results are cached in Redis for 2 hours to reduce database load.
+     */
+    @Cacheable(value = "mappingRules", key = "#tenantId.toString() + ':' + #eventType")
+    protected MappingRule findActiveMappingRule(UUID tenantId, String eventType) {
+        return mappingRuleRepository.findByTenantIdAndEventTypeAndIsActiveTrue(tenantId, eventType)
+                .orElse(null); // Cache null results too (rule doesn't exist)
     }
 
     private DraftJournalLine mapRequestLine(JournalLineRequestDto line) {

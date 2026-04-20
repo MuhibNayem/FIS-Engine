@@ -1,0 +1,320 @@
+# --- RabbitMQ StorageClass ---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rabbitmq-gp3
+  labels:
+    app: rabbitmq
+    environment: production
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+  encrypted: "true"
+  iops: "3000"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+# --- RabbitMQ ConfigMap ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: fis-production
+  labels:
+    app: rabbitmq
+    environment: production
+data:
+  rabbitmq.conf: |
+    # --- Network ---
+    listeners.tcp.default = 5672
+    listeners.ssl.default = 5671
+
+    # --- Management ---
+    management.tcp.port = 15672
+
+    # --- SSL ---
+    ssl_options.verify = verify_peer
+    ssl_options.fail_if_no_peer_cert = true
+
+    # --- Authentication ---
+    default_user = guest
+    default_pass = <RABBITMQ_PASSWORD>
+
+    # --- Cluster ---
+    cluster_formation.peer_discovery_backend = k8s
+    cluster_formation.k8s.host = kubernetes.default.svc.cluster.local
+    cluster_formation.k8s.address_type = hostname
+    cluster_formation.k8s.service_name = rabbitmq-headless
+    cluster_formation.k8s.hostname_suffix = .rabbitmq-headless.fis-production.svc.cluster.local
+    cluster_formation.node_cleanup.only_log_warning = true
+    cluster_partition_handling = autoheal
+
+    # --- Queue ---
+    queue_master_locator = min-masters
+    queue_location = client-local
+
+    # --- Message TTL & Limits ---
+    default_vhost = fis
+    channel_max = 2047
+    connection_max = 65535
+    frame_max = 131072
+    heartbeat = 60
+
+    # --- Disk & Memory ---
+    vm_memory_high_watermark.relative = 0.6
+    disk_free_limit.absolute = 2GB
+
+    # --- Logging ---
+    log.console = true
+    log.console.level = info
+    log.file.level = info
+
+    # --- Raft (Quorum Queues) ---
+    quorum_commands.soft_retry_on_error = true
+---
+# --- RabbitMQ Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: fis-production
+  labels:
+    app: rabbitmq
+    environment: production
+spec:
+  type: ClusterIP
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+      protocol: TCP
+    - name: management
+      port: 15672
+      targetPort: 15672
+      protocol: TCP
+    - name: epmd
+      port: 4369
+      targetPort: 4369
+      protocol: TCP
+  selector:
+    app: rabbitmq
+---
+# --- RabbitMQ Headless Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless
+  namespace: fis-production
+  labels:
+    app: rabbitmq
+    environment: production
+spec:
+  clusterIP: None
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+      protocol: TCP
+    - name: management
+      port: 15672
+      targetPort: 15672
+      protocol: TCP
+    - name: epmd
+      port: 4369
+      targetPort: 4369
+      protocol: TCP
+    - name: dist
+      port: 25672
+      targetPort: 25672
+      protocol: TCP
+  selector:
+    app: rabbitmq
+  publishNotReadyAddresses: true
+---
+# --- RabbitMQ Secret Template ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-secret
+  namespace: fis-production
+  labels:
+    app: rabbitmq
+    environment: production
+type: Opaque
+stringData:
+  RABBITMQ_DEFAULT_USER: "fis"
+  RABBITMQ_DEFAULT_PASS: "<RABBITMQ_PASSWORD>"
+  RABBITMQ_ERLANG_COOKIE: "<GENERATE_32_CHAR_RANDOM_STRING>"
+---
+# --- RabbitMQ StatefulSet ---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: fis-production
+  labels:
+    app: rabbitmq
+    environment: production
+spec:
+  serviceName: rabbitmq-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rabbitmq
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "15692"
+        prometheus.io/path: "/metrics"
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4.0-management-alpine
+          ports:
+            - name: amqp
+              containerPort: 5672
+              protocol: TCP
+            - name: management
+              containerPort: 15672
+              protocol: TCP
+            - name: epmd
+              containerPort: 4369
+              protocol: TCP
+            - name: dist
+              containerPort: 25672
+              protocol: TCP
+          env:
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_DEFAULT_PASS
+            - name: RABBITMQ_ERLANG_COOKIE
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_ERLANG_COOKIE
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "rabbitmq-diagnostics -q check_running"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+            failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "rabbitmq-diagnostics -q check_running"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+            - name: rabbitmq-config-volume
+              mountPath: /etc/rabbitmq
+              readOnly: true
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    rabbitmqctl stop_app
+                    sleep 10
+      volumes:
+        - name: rabbitmq-config-volume
+          configMap:
+            name: rabbitmq-config
+            items:
+              - key: rabbitmq.conf
+                path: rabbitmq.conf
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - rabbitmq
+                topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-data
+        labels:
+          app: rabbitmq
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: rabbitmq-gp3
+        resources:
+          requests:
+            storage: 20Gi
+---
+# --- RabbitMQ PodDisruptionBudget ---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq-pdb
+  namespace: fis-production
+  labels:
+    app: rabbitmq
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: rabbitmq

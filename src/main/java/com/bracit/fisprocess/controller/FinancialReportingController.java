@@ -1,5 +1,6 @@
 package com.bracit.fisprocess.controller;
 
+import com.bracit.fisprocess.annotation.ApiVersion;
 import com.bracit.fisprocess.dto.response.AccountActivityReportDto;
 import com.bracit.fisprocess.dto.response.AgingReportDto;
 import com.bracit.fisprocess.dto.response.BalanceSheetReportDto;
@@ -11,6 +12,8 @@ import com.bracit.fisprocess.dto.response.IncomeStatementReportDto;
 import com.bracit.fisprocess.dto.response.JournalRegisterReportDto;
 import com.bracit.fisprocess.dto.response.TrialBalanceReportDto;
 import com.bracit.fisprocess.service.ReportingService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +38,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/reports")
 @RequiredArgsConstructor
+@ApiVersion(1)
 public class FinancialReportingController {
 
     private final ReportingService reportingService;
@@ -114,8 +118,8 @@ public class FinancialReportingController {
             @RequestHeader("X-Tenant-Id") UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(200) int size) {
         return ResponseEntity.ok(reportingService.generateJournalRegister(tenantId, fromDate, toDate, page, size));
     }
 

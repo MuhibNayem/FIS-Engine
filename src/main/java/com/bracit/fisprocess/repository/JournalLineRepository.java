@@ -56,4 +56,32 @@ public interface JournalLineRepository extends JpaRepository<JournalLine, UUID> 
             @Param("tenantId") UUID tenantId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
+
+    @Query(value = """
+            SELECT jl.journal_line_id AS journalLineId, jl.journal_entry_id AS journalEntryId,
+                   je.posted_date AS postedDate, je.reference_id AS referenceId,
+                   je.description AS description, ABS(jl.amount) AS amount
+            FROM fis_journal_line jl
+            JOIN fis_journal_entry je ON je.journal_entry_id = jl.journal_entry_id
+            JOIN fis_account a ON a.account_id = jl.account_id
+            WHERE a.tenant_id = :tenantId
+              AND a.code = :accountCode
+              AND je.posted_date BETWEEN :startDate AND :endDate
+              AND je.status IN ('POSTED', 'CORRECTION')
+            ORDER BY je.posted_date
+            """, nativeQuery = true)
+    List<JournalLineMatchProjection> findJournalLinesForMatching(
+            @Param("tenantId") UUID tenantId,
+            @Param("accountCode") String accountCode,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    interface JournalLineMatchProjection {
+        UUID getJournalLineId();
+        UUID getJournalEntryId();
+        LocalDate getPostedDate();
+        String getReferenceId();
+        String getDescription();
+        Long getAmount();
+    }
 }
