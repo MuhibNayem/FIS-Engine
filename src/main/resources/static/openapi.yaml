@@ -962,6 +962,2219 @@ paths:
               schema:
                 $ref: '#/components/schemas/AgingReport'
 
+  # ==================== AR INVOICES ====================
+  /ar/invoices:
+    post:
+      summary: Create AR invoice
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List AR invoices
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ar/invoices/{invoiceId}:
+    get:
+      summary: Get AR invoice by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ar/invoices/{invoiceId}/finalize:
+    post:
+      summary: Finalize AR invoice
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+
+  /ar/invoices/{invoiceId}/void:
+    post:
+      summary: Void AR invoice
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+
+  /ar/invoices/{invoiceId}/lines:
+    get:
+      summary: Get AR invoice lines
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceLineResponse'
+
+  # ==================== AR PAYMENTS ====================
+  /ar/payments:
+    post:
+      summary: Record AR payment
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List AR payments
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ar/payments/{paymentId}:
+    get:
+      summary: Get AR payment by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ar/payments/{paymentId}/apply:
+    post:
+      summary: Apply AR payment to invoice
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                invoiceId:
+                  type: string
+                  format: uuid
+                amount:
+                  type: integer
+                  format: int64
+      responses:
+        '200':
+          description: OK
+
+  # ==================== AR CREDIT NOTES ====================
+  /ar/credit-notes:
+    post:
+      summary: Create AR credit note
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCreditNoteRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNoteResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List AR credit notes
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ar/credit-notes/{creditNoteId}:
+    get:
+      summary: Get AR credit note by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: creditNoteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNoteResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ar/credit-notes/{creditNoteId}/apply:
+    post:
+      summary: Apply AR credit note to invoice
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: creditNoteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                invoiceId:
+                  type: string
+                  format: uuid
+                amount:
+                  type: integer
+                  format: int64
+      responses:
+        '200':
+          description: OK
+
+  # ==================== AP BILLS ====================
+  /ap/bills:
+    post:
+      summary: Create AP bill
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBillRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List AP bills
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ap/bills/{billId}:
+    get:
+      summary: Get AP bill by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: billId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ap/bills/{billId}/finalize:
+    post:
+      summary: Finalize AP bill
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: billId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillResponse'
+
+  /ap/bills/{billId}/void:
+    post:
+      summary: Void AP bill
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: billId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillResponse'
+
+  /ap/bills/{billId}/lines:
+    get:
+      summary: Get AP bill lines
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: billId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BillLineResponse'
+
+  # ==================== AP PAYMENTS ====================
+  /ap/payments:
+    post:
+      summary: Record AP payment
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List AP payments
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ap/payments/{paymentId}:
+    get:
+      summary: Get AP payment by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ap/payments/{paymentId}/apply:
+    post:
+      summary: Apply AP payment to bill
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                billId:
+                  type: string
+                  format: uuid
+                amount:
+                  type: integer
+                  format: int64
+      responses:
+        '200':
+          description: OK
+
+  # ==================== ADMIN OUTBOX ====================
+  /admin/outbox/stats:
+    get:
+      summary: Get outbox statistics
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /admin/outbox/pending:
+    get:
+      summary: List pending outbox entries
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /admin/outbox/{id}/retry:
+    post:
+      summary: Retry outbox entry
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /admin/outbox/{id}/discard:
+    post:
+      summary: Discard outbox entry
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /admin/outbox/dlq:
+    get:
+      summary: List dead letter queue entries
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /admin/outbox/dlq/{id}/retry:
+    post:
+      summary: Retry DLQ entry
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /admin/outbox/dlq/{id}/discard:
+    post:
+      summary: Discard DLQ entry
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  # ==================== TAX ====================
+  /tax/calculate:
+    post:
+      summary: Calculate tax
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                taxableAmount:
+                  type: integer
+                  format: int64
+                taxRateId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taxAmount:
+                    type: integer
+                    format: int64
+
+  /tax/returns:
+    get:
+      summary: List tax returns
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaxReturnResponse'
+
+  /tax/returns/generate:
+    post:
+      summary: Generate tax return
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                period:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxReturnResponse'
+
+  /tax/returns/{id}/file:
+    post:
+      summary: File tax return
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxReturnResponse'
+
+  /tax/reports/liability:
+    get:
+      summary: Get tax liability report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilityReport'
+
+  # ==================== FIXED ASSETS ====================
+  /fixed-assets/categories:
+    post:
+      summary: Create asset category
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssetCategoryRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCategoryResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List asset categories
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AssetCategoryResponse'
+
+  /fixed-assets/categories/{id}:
+    get:
+      summary: Get asset category by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCategoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /fixed-assets:
+    post:
+      summary: Register a fixed asset
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterAssetRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixedAssetResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List fixed assets
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FixedAssetResponse'
+
+  /fixed-assets/{id}:
+    get:
+      summary: Get fixed asset by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixedAssetResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /fixed-assets/{id}/schedule:
+    get:
+      summary: Get depreciation schedule for asset
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DepreciationScheduleEntry'
+
+  /fixed-assets/{id}/transfer:
+    post:
+      summary: Transfer fixed asset to new location
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: newLocation
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixedAssetResponse'
+
+  /fixed-assets/{id}/revalue:
+    post:
+      summary: Revalue fixed asset
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: newValue
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: reason
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixedAssetResponse'
+
+  /fixed-assets/{id}/dispose:
+    post:
+      summary: Dispose fixed asset
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetDisposalRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetDisposalResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /fixed-assets/by-category/{categoryId}:
+    get:
+      summary: List fixed assets by category
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FixedAssetResponse'
+
+  /fixed-assets/depreciate:
+    post:
+      summary: Run depreciation for all assets in period
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "2026-04"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetDepreciationRunResponse'
+
+  /fixed-assets/depreciate/category/{categoryId}:
+    post:
+      summary: Run depreciation for asset category
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetDepreciationRunResponse'
+
+  /fixed-assets/depreciation-runs:
+    get:
+      summary: List depreciation runs
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: periodFrom
+          in: query
+          schema:
+            type: string
+        - name: periodTo
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetDepreciationRunResponse'
+
+  /fixed-assets/depreciation-runs/{runId}:
+    get:
+      summary: Get depreciation run by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetDepreciationRunResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /fixed-assets/depreciation-runs/{runId}/reverse:
+    post:
+      summary: Reverse depreciation run
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /fixed-assets/disposals:
+    get:
+      summary: List asset disposals
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetDisposalResponse'
+
+  /fixed-assets/register:
+    get:
+      summary: Get fixed asset register report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixedAssetRegisterResponse'
+
+  /fixed-assets/valuation:
+    get:
+      summary: Get fixed asset valuation
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: asOfDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetValuationResponse'
+
+  # ==================== PAYROLL ====================
+  /payroll/employees:
+    post:
+      summary: Register payroll employee
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterEmployeeRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollEmployeeResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List payroll employees
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /payroll/runs:
+    post:
+      summary: Create payroll run
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePayrollRunRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollRunResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List payroll runs
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /payroll/runs/{id}:
+    get:
+      summary: Get payroll run by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollRunResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /payroll/runs/{id}/post:
+    post:
+      summary: Calculate and post payroll run
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/ActorHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayrollRunResponse'
+
+  # ==================== INVENTORY ====================
+  /inventory/warehouses:
+    post:
+      summary: Create warehouse
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWarehouseRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /inventory/warehouses/{id}:
+    get:
+      summary: Get warehouse by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /inventory/items:
+    post:
+      summary: Create inventory item
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInventoryItemRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItemResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /inventory/items/{id}:
+    get:
+      summary: Get inventory item by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /inventory/movements:
+    post:
+      summary: Record inventory movement
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordInventoryMovementRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryMovementResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /inventory/valuation:
+    get:
+      summary: Get inventory valuation
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryValuationResponse'
+
+  # ==================== BANK RECONCILIATION ====================
+  /bank/reconciliations/start:
+    post:
+      summary: Start bank reconciliation
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartReconciliationRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /bank/reconciliations:
+    get:
+      summary: List bank reconciliations
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: bankAccountId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /bank/reconciliations/{id}:
+    get:
+      summary: Get bank reconciliation by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /bank/reconciliations/{id}/auto-match:
+    post:
+      summary: Auto-match reconciliation lines
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /bank/reconciliations/{id}/match:
+    post:
+      summary: Manually match reconciliation lines
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchLineRequest'
+      responses:
+        '200':
+          description: OK
+
+  /bank/reconciliations/matches/{matchId}/unmatch:
+    post:
+      summary: Unmatch reconciliation lines
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+
+  /bank/reconciliations/{id}/complete:
+    post:
+      summary: Complete bank reconciliation
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationResponse'
+
+  /bank/reconciliations/reports/outstanding-items:
+    get:
+      summary: Get outstanding items report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: bankAccountId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: asOfDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutstandingItemsReport'
+
+  # ==================== CONSOLIDATION ====================
+  /consolidation/groups:
+    post:
+      summary: Create consolidation group
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConsolidationGroupRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsolidationGroupResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List consolidation groups
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /consolidation/groups/{id}:
+    get:
+      summary: Get consolidation group by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsolidationGroupResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /consolidation/groups/{id}/members:
+    post:
+      summary: Add member to consolidation group
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddConsolidationMemberRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsolidationMemberResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /consolidation/groups/{id}/run:
+    post:
+      summary: Run consolidation for group
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsolidationRunResponse'
+
+  # ==================== BUDGET ====================
+  /budgets:
+    post:
+      summary: Create budget
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBudgetRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List budgets
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /budgets/{id}:
+    get:
+      summary: Get budget by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /budgets/{id}/approve:
+    post:
+      summary: Approve budget
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+
+  /budgets/{id}/variance:
+    get:
+      summary: Get budget variance report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetVarianceResponse'
+
+  # ==================== BANK ACCOUNTS ====================
+  /bank/accounts:
+    post:
+      summary: Register bank account
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterBankAccountRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccountResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List bank accounts
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /bank/accounts/{id}:
+    get:
+      summary: Get bank account by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccountResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /bank/accounts/{id}/close:
+    post:
+      summary: Close bank account
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankAccountResponse'
+
+  # ==================== BANK STATEMENTS ====================
+  /bank/statements/import:
+    post:
+      summary: Import bank statement
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportBankStatementRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankStatementResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /bank/statements:
+    get:
+      summary: List bank statements
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: bankAccountId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /bank/statements/{id}:
+    get:
+      summary: Get bank statement by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankStatementResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /bank/statements/{id}/lines:
+    get:
+      summary: Get bank statement lines
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BankStatementLineResponse'
+
+  # ==================== AR CUSTOMERS ====================
+  /ar/customers:
+    post:
+      summary: Create AR customer
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List AR customers
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ar/customers/{customerId}:
+    get:
+      summary: Get AR customer by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ar/reports/aging:
+    get:
+      summary: Generate AR aging report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: asOfDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: customerId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgingReport'
+
+  # ==================== AP VENDORS ====================
+  /ap/vendors:
+    post:
+      summary: Create AP vendor
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVendorRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+    get:
+      summary: List AP vendors
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ap/vendors/{vendorId}:
+    get:
+      summary: Get AP vendor by ID
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: vendorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ap/reports/aging:
+    get:
+      summary: Generate AP aging report
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - name: asOfDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: vendorId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgingReport'
+
+  # ==================== TAX (missing POST endpoints) ====================
+  /tax/rates:
+    post:
+      summary: Create tax rate
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaxRateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /tax/groups:
+    post:
+      summary: Create tax group
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaxGroupRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxGroupResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2196,3 +4409,761 @@ components:
         grandTotal:
           type: integer
           format: int64
+
+    # ==================== FIXED ASSETS ====================
+    CreateAssetCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        defaultUsefulLifeMonths:
+          type: integer
+        depreciationMethod:
+          type: string
+          enum: [STRAIGHT_LINE, DECLINING_BALANCE, SUM_OF_YEARS_DIGITS, UNITS_OF_PRODUCTION]
+        glAccountCode:
+          type: string
+
+    AssetCategoryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        defaultUsefulLifeMonths:
+          type: integer
+        depreciationMethod:
+          type: string
+        glAccountCode:
+          type: string
+
+    RegisterAssetRequest:
+      type: object
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        assetTag:
+          type: string
+        name:
+          type: string
+        acquisitionDate:
+          type: string
+          format: date
+        acquisitionCost:
+          type: integer
+          format: int64
+        salvageValue:
+          type: integer
+          format: int64
+        usefulLifeMonths:
+          type: integer
+        depreciationMethod:
+          type: string
+        location:
+          type: string
+
+    FixedAssetResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assetTag:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        acquisitionDate:
+          type: string
+          format: date
+        acquisitionCost:
+          type: integer
+          format: int64
+        salvageValue:
+          type: integer
+          format: int64
+        usefulLifeMonths:
+          type: integer
+        accumulatedDepreciation:
+          type: integer
+          format: int64
+        netBookValue:
+          type: integer
+          format: int64
+        location:
+          type: string
+
+    DepreciationScheduleEntry:
+      type: object
+      properties:
+        assetId:
+          type: string
+          format: uuid
+        period:
+          type: string
+        monthlyDepreciation:
+          type: integer
+          format: int64
+        accumulatedDepreciation:
+          type: integer
+          format: int64
+        netBookValue:
+          type: integer
+          format: int64
+
+    AssetDisposalRequest:
+      type: object
+      properties:
+        disposalDate:
+          type: string
+          format: date
+        saleProceeds:
+          type: integer
+          format: int64
+        disposalType:
+          type: string
+          enum: [SALE, SCRAP, TRANSFER]
+
+    AssetDisposalResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assetId:
+          type: string
+          format: uuid
+        disposalDate:
+          type: string
+          format: date
+        saleProceeds:
+          type: integer
+          format: int64
+        netBookValue:
+          type: integer
+          format: int64
+        gainLoss:
+          type: integer
+          format: int64
+        disposalType:
+          type: string
+
+    AssetDepreciationRunResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        period:
+          type: string
+        status:
+          type: string
+        totalDepreciation:
+          type: integer
+          format: int64
+        assetCount:
+          type: integer
+
+    FixedAssetRegisterResponse:
+      type: object
+      properties:
+        totalAssets:
+          type: integer
+        totalAcquisitionCost:
+          type: integer
+          format: int64
+        totalAccumulatedDepreciation:
+          type: integer
+          format: int64
+        totalNetBookValue:
+          type: integer
+          format: int64
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/FixedAssetResponse'
+
+    AssetValuationResponse:
+      type: object
+      properties:
+        totalAssets:
+          type: integer
+        totalAcquisitionCost:
+          type: integer
+          format: int64
+        totalNetBookValue:
+          type: integer
+          format: int64
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              assetTag:
+                type: string
+              name:
+                type: string
+              netBookValue:
+                type: integer
+                format: int64
+
+    # ==================== PAYROLL ====================
+    RegisterEmployeeRequest:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        department:
+          type: string
+        glDepartmentAccountCode:
+          type: string
+        basicSalary:
+          type: integer
+          format: int64
+        allowances:
+          type: integer
+          format: int64
+
+    PayrollEmployeeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        department:
+          type: string
+        basicSalary:
+          type: integer
+          format: int64
+
+    CreatePayrollRunRequest:
+      type: object
+      properties:
+        period:
+          type: string
+
+    PayrollRunResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        period:
+          type: string
+        status:
+          type: string
+        totalGross:
+          type: integer
+          format: int64
+        totalNet:
+          type: integer
+          format: int64
+
+    # ==================== INVENTORY ====================
+    CreateWarehouseRequest:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        location:
+          type: string
+        glAccountCode:
+          type: string
+
+    WarehouseResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        location:
+          type: string
+
+    CreateInventoryItemRequest:
+      type: object
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        uom:
+          type: string
+        costMethod:
+          type: string
+        glInventoryAccountCode:
+          type: string
+        glCogsAccountCode:
+          type: string
+        standardCost:
+          type: integer
+          format: int64
+
+    InventoryItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+
+    RecordInventoryMovementRequest:
+      type: object
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        warehouseId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [RECEIPT, ISSUE, ADJUSTMENT]
+        quantity:
+          type: integer
+        unitCost:
+          type: integer
+          format: int64
+        reference:
+          type: string
+        referenceDate:
+          type: string
+          format: date
+
+    InventoryMovementResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        itemId:
+          type: string
+          format: uuid
+        type:
+          type: string
+        quantity:
+          type: integer
+
+    InventoryValuationResponse:
+      type: object
+      properties:
+        period:
+          type: string
+        totalValue:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            type: object
+
+    # ==================== BANK RECONCILIATION ====================
+    StartReconciliationRequest:
+      type: object
+      properties:
+        bankAccountId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+
+    MatchLineRequest:
+      type: object
+      properties:
+        statementLineId:
+          type: string
+          format: uuid
+        journalLineId:
+          type: string
+          format: uuid
+        amount:
+          type: integer
+          format: int64
+
+    ReconciliationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        bankAccountId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        statementBalance:
+          type: integer
+          format: int64
+        bookBalance:
+          type: integer
+          format: int64
+        difference:
+          type: integer
+          format: int64
+
+    OutstandingItemsReport:
+      type: object
+      properties:
+        bankAccountId:
+          type: string
+          format: uuid
+        asOfDate:
+          type: string
+          format: date
+        outstandingDebits:
+          type: integer
+          format: int64
+        outstandingCredits:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            type: object
+
+    # ==================== CONSOLIDATION ====================
+    CreateConsolidationGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        baseCurrency:
+          type: string
+
+    ConsolidationGroupResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        baseCurrency:
+          type: string
+        memberCount:
+          type: integer
+
+    AddConsolidationMemberRequest:
+      type: object
+      properties:
+        memberTenantId:
+          type: string
+          format: uuid
+        ownershipPercentage:
+          type: number
+        currency:
+          type: string
+        translationMethod:
+          type: string
+
+    ConsolidationMemberResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        memberTenantId:
+          type: string
+          format: uuid
+        ownershipPercentage:
+          type: number
+        currency:
+          type: string
+
+    ConsolidationRunResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        period:
+          type: string
+        status:
+          type: string
+        totalAssets:
+          type: integer
+          format: int64
+        totalLiabilities:
+          type: integer
+          format: int64
+        totalEquity:
+          type: integer
+          format: int64
+
+    # ==================== BUDGET ====================
+    CreateBudgetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        fiscalYear:
+          type: integer
+        status:
+          type: string
+
+    BudgetResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        fiscalYear:
+          type: integer
+        status:
+          type: string
+        totalBudgeted:
+          type: integer
+          format: int64
+        totalActual:
+          type: integer
+          format: int64
+
+    BudgetVarianceResponse:
+      type: object
+      properties:
+        budgetId:
+          type: string
+          format: uuid
+        fiscalYear:
+          type: integer
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              accountCode:
+                type: string
+              accountName:
+                type: string
+              budgeted:
+                type: integer
+                format: int64
+              actual:
+                type: integer
+                format: int64
+              variance:
+                type: integer
+                format: int64
+              variancePercentage:
+                type: number
+
+    # ==================== BANK ACCOUNTS ====================
+    RegisterBankAccountRequest:
+      type: object
+      properties:
+        accountNumber:
+          type: string
+        bankName:
+          type: string
+        branchCode:
+          type: string
+        currency:
+          type: string
+        glAccountCode:
+          type: string
+
+    BankAccountResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountNumber:
+          type: string
+        bankName:
+          type: string
+        branchCode:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
+
+    # ==================== BANK STATEMENTS ====================
+    ImportBankStatementRequest:
+      type: object
+      properties:
+        bankAccountId:
+          type: string
+          format: uuid
+        statementDate:
+          type: string
+          format: date
+        openingBalance:
+          type: integer
+          format: int64
+        closingBalance:
+          type: integer
+          format: int64
+        importedBy:
+          type: string
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              description:
+                type: string
+              amount:
+                type: integer
+                format: int64
+              reference:
+                type: string
+
+    BankStatementResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        bankAccountId:
+          type: string
+          format: uuid
+        statementDate:
+          type: string
+          format: date
+        openingBalance:
+          type: integer
+          format: int64
+        closingBalance:
+          type: integer
+          format: int64
+
+    BankStatementLineResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        amount:
+          type: integer
+          format: int64
+        reference:
+          type: string
+        matched:
+          type: boolean
+
+    # ==================== AR/AP ====================
+    CreateCustomerRequest:
+      type: object
+      properties:
+        customerCode:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        taxId:
+          type: string
+
+    CustomerResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerCode:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+
+    CreateVendorRequest:
+      type: object
+      properties:
+        vendorCode:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        taxId:
+          type: string
+
+    VendorResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        vendorCode:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+
+    # ==================== TAX ====================
+    CreateTaxRateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        rate:
+          type: number
+        applicableTo:
+          type: string
+
+    CreateTaxGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        rates:
+          type: array
+          items:
+            type: string
+            format: uuid

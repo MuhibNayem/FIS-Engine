@@ -20,6 +20,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class ApiVersioningConfig implements WebMvcConfigurer {
 
   private final ApiVersionInterceptor apiVersionInterceptor;
+  private final ResponseCachingInterceptor responseCachingInterceptor;
 
   /**
    * Creates the interceptor with values driven by {@code application.yml}.
@@ -29,15 +30,20 @@ public class ApiVersioningConfig implements WebMvcConfigurer {
    */
   public ApiVersioningConfig(
       @Value("${fis.api.version.supported:#{T(java.util.Set).of(1)}}") Set<Integer> supportedVersions,
-      @Value("${fis.api.version.current:1}") int currentVersion) {
+      @Value("${fis.api.version.current:1}") int currentVersion,
+      ResponseCachingInterceptor responseCachingInterceptor) {
     this.apiVersionInterceptor = new ApiVersionInterceptor(supportedVersions, currentVersion);
+    this.responseCachingInterceptor = responseCachingInterceptor;
   }
 
   @Override
   public void addInterceptors(InterceptorRegistry registry) {
     registry.addInterceptor(apiVersionInterceptor)
         .addPathPatterns("/**")
-        .order(0); // Run before any other interceptor
+        .order(0);
+    registry.addInterceptor(responseCachingInterceptor)
+        .addPathPatterns("/v1/**")
+        .order(1);
   }
 
   /**

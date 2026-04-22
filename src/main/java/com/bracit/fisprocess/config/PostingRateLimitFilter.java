@@ -87,6 +87,7 @@ public class PostingRateLimitFilter extends OncePerRequestFilter {
             String path = request.getRequestURI();
             return path.startsWith("/v1/events")
                     || path.startsWith("/v1/journal-entries")
+                    || path.startsWith("/v1/async/journal-entries")
                     || path.startsWith("/v1/settlements")
                     || path.startsWith("/v1/revaluations");
         }

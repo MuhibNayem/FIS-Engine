@@ -3,8 +3,10 @@ package com.bracit.fisprocess.service;
 import com.bracit.fisprocess.domain.entity.JournalEntry;
 import com.bracit.fisprocess.domain.model.DraftJournalEntry;
 
+import java.util.List;
+
 /**
- * Persists a validated draft journal entry as an immutable ledger record.
+ * Persists validated draft journal entries as immutable ledger records.
  */
 public interface LedgerPersistenceService {
 
@@ -21,4 +23,14 @@ public interface LedgerPersistenceService {
      * @return the persisted journal entry
      */
     JournalEntry persist(DraftJournalEntry draft);
+
+    /**
+     * Batch persist multiple draft journal entries efficiently.
+     * Uses batch insert for journal entries and lines, and aggregates
+     * account balance updates.
+     *
+     * @param drafts the validated drafts to persist
+     * @return the persisted journal entries
+     */
+    List<JournalEntry> persistBatch(List<DraftJournalEntry> drafts);
 }

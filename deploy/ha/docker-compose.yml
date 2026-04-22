@@ -1,0 +1,228 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/fis-app.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      fis-app-1:
+        condition: service_healthy
+      fis-app-2:
+        condition: service_healthy
+      fis-app-3:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  fis-app-1:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SERVER_PORT=8080
+      - FIS_INSTANCE_ID=instance-1
+      - DB_URL=jdbc:postgresql://postgres-primary:5432/fisdb
+      - DB_USERNAME=fis_user
+      - DB_PASSWORD=${FIS_DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+
+  fis-app-2:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SERVER_PORT=8081
+      - FIS_INSTANCE_ID=instance-2
+      - DB_URL=jdbc:postgresql://postgres-primary:5432/fisdb
+      - DB_USERNAME=fis_user
+      - DB_PASSWORD=${FIS_DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+
+  fis-app-3:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SERVER_PORT=8082
+      - FIS_INSTANCE_ID=instance-3
+      - DB_URL=jdbc:postgresql://postgres-primary:5432/fisdb
+      - DB_USERNAME=fis_user
+      - DB_PASSWORD=${FIS_DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+
+  postgres-primary:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=fisdb
+      - POSTGRES_USER=fis_user
+      - POSTGRES_PASSWORD=${FIS_DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./postgres/replica.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fis_user -d fisdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+
+  postgres-replica:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=fisdb
+      - POSTGRES_USER=fis_user
+      - POSTGRES_PASSWORD=${FIS_DB_PASSWORD}
+    volumes:
+      - postgres-replica-data:/var/lib/postgresql/data
+      - ./postgres/replica.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c primary_conninfo=host=postgres-primary port=5432 user=fis_user password=${FIS_DB_PASSWORD} -c hot_standby=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fis_user -d fisdb -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+
+  rabbitmq:
+    image: rabbitmq:3.13-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=fis
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-fis}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+volumes:
+  postgres-primary-data:
+  postgres-replica-data:
+  redis-data:
+  rabbitmq-data:
+
+networks:
+  default:
+    name: fis-network

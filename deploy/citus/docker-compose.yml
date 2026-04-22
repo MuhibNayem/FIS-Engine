@@ -1,0 +1,163 @@
+services:
+  # Citus Coordinator Node
+  citus-coordinator:
+    image: citusdata/citus:${CITUS_VERSION:-14.0.0}
+    container_name: fis-citus-coordinator
+    environment:
+      POSTGRES_DB: fisdb
+      POSTGRES_USER: fis_user
+      POSTGRES_PASSWORD: fis_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - citus_coordinator_data:/var/lib/postgresql/data
+      - ./deploy/citus/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fis_user -d fisdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Citus Worker 1 (Shard 1: Accounts 1000-4999)
+  citus-worker-1:
+    image: citusdata/citus:${CITUS_VERSION:-14.0.0}
+    container_name: fis-citus-worker-1
+    environment:
+      POSTGRES_DB: fisdb
+      POSTGRES_USER: fis_user
+      POSTGRES_PASSWORD: fis_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - citus_worker1_data:/var/lib/postgresql/data
+    command: >
+      postgres -c shared_preload_libraries=citus
+               -c citus.shard_count=32
+               -c citus.shard_replication_factor=1
+    depends_on:
+      citus-coordinator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fis_user -d fisdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Citus Worker 2 (Shard 2: Accounts 5000-9999)
+  citus-worker-2:
+    image: citusdata/citus:${CITUS_VERSION:-14.0.0}
+    container_name: fis-citus-worker-2
+    environment:
+      POSTGRES_DB: fisdb
+      POSTGRES_USER: fis_user
+      POSTGRES_PASSWORD: fis_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - citus_worker2_data:/var/lib/postgresql/data
+    command: >
+      postgres -c shared_preload_libraries=citus
+               -c citus.shard_count=32
+               -c citus.shard_replication_factor=1
+    depends_on:
+      citus-coordinator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fis_user -d fisdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Citus Worker 3 (Shard 3: Accounts 10000+)
+  citus-worker-3:
+    image: citusdata/citus:${CITUS_VERSION:-14.0.0}
+    container_name: fis-citus-worker-3
+    environment:
+      POSTGRES_DB: fisdb
+      POSTGRES_USER: fis_user
+      POSTGRES_PASSWORD: fis_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - citus_worker3_data:/var/lib/postgresql/data
+    command: >
+      postgres -c shared_preload_libraries=citus
+               -c citus.shard_count=32
+               -c citus.shard_replication_factor=1
+    depends_on:
+      citus-coordinator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fis_user -d fisdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # RabbitMQ for async messaging
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: fis_user
+      RABBITMQ_DEFAULT_PASS: fis_password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.118.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./deploy/otel/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
+  # FIS Process Application
+  fis-process:
+    build: .
+    depends_on:
+      citus-coordinator:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    environment:
+      DB_URL: jdbc:postgresql://citus-coordinator:5432/fisdb
+      DB_USERNAME: fis_user
+      DB_PASSWORD: fis_password
+      DB_DRIVER: org.postgresql.Driver
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: fis_user
+      RABBITMQ_PASSWORD: fis_password
+      FIS_SHARDING_ENABLED: "true"
+      FIS_SHARDING_COORDINATOR_URL: jdbc:postgresql://citus-coordinator:5432/fisdb
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
+      FIS_SECURITY_ENABLED: "false"
+      FIS_SECURITY_ALLOW_INSECURE_MODE: "true"
+    ports:
+      - "8080:8080"
+
+volumes:
+  citus_coordinator_data:
+  citus_worker1_data:
+  citus_worker2_data:
+  citus_worker3_data:
+  redis_data:
+  rabbitmq_data:

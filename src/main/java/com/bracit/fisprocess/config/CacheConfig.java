@@ -20,9 +20,12 @@ import java.util.Map;
  * <p>
  * Provides distributed caching for frequently accessed, rarely-changing data:
  * <ul>
- * <li><b>Accounts</b>: Chart of Accounts entries (1 hour TTL)</li>
- * <li><b>Exchange Rates</b>: Daily FX conversion rates (15 minute TTL)</li>
- * <li><b>Mapping Rules</b>: Event-to-journal mapping rules (2 hour TTL)</li>
+ * <li><b>accounts</b>: Chart of Accounts entries (1 hour TTL)</li>
+ * <li><b>exchangeRates</b>: Daily FX conversion rates (15 minute TTL)</li>
+ * <li><b>mappingRules</b>: Event-to-journal mapping rules (2 hour TTL)</li>
+ * <li><b>accountingPeriods</b>: Accounting period data (30 min TTL)</li>
+ * <li><b>tenants</b>: Tenant configuration (1 hour TTL)</li>
+ * <li><b>reports</b>: Report generation results (30 sec TTL)</li>
  * </ul>
  * <p>
  * Redis is used instead of local caching (Caffeine) for these entities because:
@@ -36,12 +39,18 @@ import java.util.Map;
 @EnableCaching
 public class CacheConfig {
 
+    public static final String CACHE_ACCOUNTS = "accounts";
+    public static final String CACHE_EXCHANGE_RATES = "exchangeRates";
+    public static final String CACHE_MAPPING_RULES = "mappingRules";
+    public static final String CACHE_ACCOUNTING_PERIODS = "accountingPeriods";
+    public static final String CACHE_TENANTS = "tenants";
+    public static final String CACHE_REPORTS = "reports";
+
     /**
      * Creates a Redis-backed cache manager with JSON serialization and per-cache TTLs.
      */
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        // Default cache configuration: 30 min TTL, JSON serialization
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(30))
                 .serializeKeysWith(
@@ -51,14 +60,14 @@ public class CacheConfig {
                 .disableCachingNullValues()
                 .prefixCacheNameWith("fis:cache:");
 
-        // Per-cache custom TTLs
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
-        cacheConfigurations.put("accounts",
-                defaultConfig.entryTtl(Duration.ofHours(1)));
-        cacheConfigurations.put("exchangeRates",
-                defaultConfig.entryTtl(Duration.ofMinutes(15)));
-        cacheConfigurations.put("mappingRules",
-                defaultConfig.entryTtl(Duration.ofHours(2)));
+
+        cacheConfigurations.put(CACHE_ACCOUNTS, defaultConfig.entryTtl(Duration.ofHours(1)));
+        cacheConfigurations.put(CACHE_EXCHANGE_RATES, defaultConfig.entryTtl(Duration.ofMinutes(15)));
+        cacheConfigurations.put(CACHE_MAPPING_RULES, defaultConfig.entryTtl(Duration.ofHours(2)));
+        cacheConfigurations.put(CACHE_ACCOUNTING_PERIODS, defaultConfig.entryTtl(Duration.ofMinutes(30)));
+        cacheConfigurations.put(CACHE_TENANTS, defaultConfig.entryTtl(Duration.ofHours(1)));
+        cacheConfigurations.put(CACHE_REPORTS, defaultConfig.entryTtl(Duration.ofSeconds(30)));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)

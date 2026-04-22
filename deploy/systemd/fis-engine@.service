@@ -1,0 +1,32 @@
+[Unit]
+Description=FIS-Engine Application Server Instance %i
+After=network.target redis.service rabbitmq.service postgresql.service
+Wants=redis.service rabbitmq.service postgresql.service
+PartOf=fis-engine.target
+
+[Service]
+Type=simple
+User=fis
+Group=fis
+WorkingDirectory=/opt/fis-engine
+Environment="SPRING_PROFILES_ACTIVE=prod"
+Environment="SERVER_PORT=%i"
+Environment="DB_URL=jdbc:postgresql://localhost:5432/fisdb"
+Environment="DB_USERNAME=fis_user"
+Environment="DB_PASSWORD=${FIS_DB_PASSWORD}"
+Environment="REDIS_HOST=localhost"
+Environment="REDIS_PORT=6379"
+Environment="RABBITMQ_HOST=localhost"
+Environment="RABBITMQ_PORT=5672"
+Environment="FIS_INSTANCE_ID=instance-%i"
+ExecStart=/opt/fis-engine/bin/fis-process --server.port=%i
+Restart=on-failure
+RestartSec=10s
+SuccessExitStatus=143
+TimeoutStopSec=60s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fis-engine-%i
+
+[Install]
+WantedBy=fis-engine.target

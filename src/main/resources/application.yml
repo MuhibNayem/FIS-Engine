@@ -86,6 +86,10 @@ fis:
   idempotency:
     retention-days: ${FIS_IDEMPOTENCY_RETENTION_DAYS:7}
     cleanup-cron: ${FIS_IDEMPOTENCY_CLEANUP_CRON:0 0 3 * * *}
+  async:
+    reply-timeout-seconds: ${FIS_ASYNC_REPLY_TIMEOUT_SECONDS:30}
+    worker-concurrency: ${FIS_ASYNC_WORKER_CONCURRENCY:10}
+    cleanup-cron: ${FIS_ASYNC_CLEANUP_CRON:0 0 4 * * *}
   revaluation:
     reserve-account-code: ${FIS_REVAL_RESERVE_ACCOUNT:FX_REVAL_RESERVE}
     gain-account-code: ${FIS_REVAL_GAIN_ACCOUNT:FX_UNREALIZED_GAIN}
@@ -111,6 +115,16 @@ fis:
     requests-per-window: ${FIS_RATE_LIMIT_REQUESTS_PER_WINDOW:60}
     read-requests-per-window: ${FIS_RATE_LIMIT_READ_REQUESTS_PER_WINDOW:120}
     fail-open: ${FIS_RATE_LIMIT_FAIL_OPEN:true}
+  batch:
+    enabled: ${FIS_BATCH_ENABLED:false}
+    max-size: ${FIS_BATCH_MAX_SIZE:100}
+    flush-interval-ms: ${FIS_BATCH_FLUSH_INTERVAL_MS:10}
+    use-copy: ${FIS_BATCH_USE_COPY:false}
+    worker-concurrency: ${FIS_BATCH_WORKER_CONCURRENCY:10}
+  coalescer:
+    enabled: ${FIS_COALESCER_ENABLED:true}
+    window-ms: ${FIS_COALESCER_WINDOW_MS:10}
+    max-batch-size: ${FIS_COALESCER_MAX_BATCH_SIZE:100}
 
 # --- Actuator ---
 management:
@@ -141,6 +155,25 @@ management:
 server:
   forward-headers-strategy: framework
   shutdown: graceful
+
+fis:
+  instance:
+    id: ${FIS_INSTANCE_ID:}
+  cache:
+    response:
+      enabled: ${FIS_CACHE_RESPONSE_ENABLED:true}
+      default-ttl-seconds: ${FIS_CACHE_RESPONSE_DEFAULT_TTL:30}
+      accounting-periods-ttl-seconds: ${FIS_CACHE_RESPONSE_ACCT_PERIODS_TTL:300}
+      accounts-ttl-seconds: ${FIS_CACHE_RESPONSE_ACCOUNTS_TTL:300}
+      reports-ttl-seconds: ${FIS_CACHE_RESPONSE_REPORTS_TTL:10}
+  read-replica:
+    enabled: ${FIS_READ_REPLICA_ENABLED:false}
+    primary-url: ${DB_URL:jdbc:postgresql://localhost:5432/fisdb}
+    replica-urls: ${FIS_READ_REPLICA_URLS:}
+  query:
+    timeout-seconds: ${DB_QUERY_TIMEOUT_SECONDS:30}
+    slow-query-threshold-ms: ${FIS_SLOW_QUERY_THRESHOLD_MS:1000}
+    max-results: ${FIS_QUERY_MAX_RESULTS:10000}
 
 ---
 # ========================

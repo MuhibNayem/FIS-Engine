@@ -56,6 +56,43 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Declarables journalWriteTopology() {
+        TopicExchange writeExchange = new TopicExchange(RabbitMqTopology.JOURNAL_WRITE_EXCHANGE, true, false);
+        DirectExchange dlxExchange = new DirectExchange(RabbitMqTopology.DLX_EXCHANGE, true, false);
+
+        Queue writeQueue = QueueBuilder.durable(RabbitMqTopology.JOURNAL_WRITE_QUEUE)
+                .withArgument("x-queue-type", "quorum")
+                .withArgument("x-dead-letter-exchange", RabbitMqTopology.DLX_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", RabbitMqTopology.JOURNAL_WRITE_DLQ_ROUTING_KEY)
+                .build();
+
+        Queue replyQueue = QueueBuilder.durable(RabbitMqTopology.JOURNAL_WRITE_REPLY_QUEUE)
+                .withArgument("x-queue-type", "quorum")
+                .build();
+
+        Queue dlq = QueueBuilder.durable(RabbitMqTopology.JOURNAL_WRITE_DLQ_QUEUE)
+                .withArgument("x-queue-type", "quorum")
+                .build();
+
+        Binding writeBinding = BindingBuilder.bind(writeQueue)
+                .to(writeExchange)
+                .with(RabbitMqTopology.JOURNAL_WRITE_ROUTING_KEY);
+
+        Binding dlqBinding = BindingBuilder.bind(dlq)
+                .to(dlxExchange)
+                .with(RabbitMqTopology.JOURNAL_WRITE_DLQ_ROUTING_KEY);
+
+        return new Declarables(
+                writeExchange,
+                dlxExchange,
+                writeQueue,
+                replyQueue,
+                dlq,
+                writeBinding,
+                dlqBinding);
+    }
+
+    @Bean
     MessageConverter rabbitMessageConverter(JsonMapper jsonMapper) {
         return new JacksonJsonMessageConverter(jsonMapper);
     }

@@ -10,6 +10,7 @@ import com.bracit.fisprocess.domain.model.DraftJournalEntry;
 import com.bracit.fisprocess.domain.model.DraftJournalLine;
 import com.bracit.fisprocess.exception.AccountNotFoundException;
 import com.bracit.fisprocess.repository.AccountRepository;
+import com.bracit.fisprocess.repository.BatchJournalRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import com.bracit.fisprocess.repository.JournalSequenceRepository;
 import com.bracit.fisprocess.service.HashChainService;
@@ -48,6 +49,7 @@ class LedgerPersistenceServiceImplTest {
     @Mock private JournalSequenceRepository journalSequenceRepository;
     @Mock private HashChainService hashChainService;
     @Mock private LedgerLockingService ledgerLockingService;
+    @Mock private BatchJournalRepository batchJournalRepository;
     @Mock private MeterRegistry meterRegistry;
     @Mock private Timer mockTimer;
 
@@ -60,7 +62,7 @@ class LedgerPersistenceServiceImplTest {
     void setUp() {
         service = new LedgerPersistenceServiceImpl(
                 journalEntryRepository, accountRepository, journalSequenceRepository,
-                hashChainService, ledgerLockingService, meterRegistry);
+                hashChainService, ledgerLockingService, batchJournalRepository, meterRegistry);
         when(meterRegistry.timer(anyString())).thenReturn(mockTimer);
     }
 
