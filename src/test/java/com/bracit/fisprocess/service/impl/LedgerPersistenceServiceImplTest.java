@@ -14,7 +14,7 @@ import com.bracit.fisprocess.repository.BatchJournalRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import com.bracit.fisprocess.repository.JournalSequenceRepository;
 import com.bracit.fisprocess.service.HashChainService;
-import com.bracit.fisprocess.service.LedgerLockingService;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,22 +25,28 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("LedgerPersistenceServiceImpl Unit Tests")
 class LedgerPersistenceServiceImplTest {
 
@@ -48,10 +54,10 @@ class LedgerPersistenceServiceImplTest {
     @Mock private AccountRepository accountRepository;
     @Mock private JournalSequenceRepository journalSequenceRepository;
     @Mock private HashChainService hashChainService;
-    @Mock private LedgerLockingService ledgerLockingService;
     @Mock private BatchJournalRepository batchJournalRepository;
     @Mock private MeterRegistry meterRegistry;
     @Mock private Timer mockTimer;
+    @Mock private Counter mockCounter;
 
     private LedgerPersistenceServiceImpl service;
 
@@ -62,8 +68,9 @@ class LedgerPersistenceServiceImplTest {
     void setUp() {
         service = new LedgerPersistenceServiceImpl(
                 journalEntryRepository, accountRepository, journalSequenceRepository,
-                hashChainService, ledgerLockingService, batchJournalRepository, meterRegistry);
+                hashChainService, batchJournalRepository, meterRegistry);
         when(meterRegistry.timer(anyString())).thenReturn(mockTimer);
+        when(meterRegistry.counter(anyString())).thenReturn(mockCounter);
     }
 
     private Account buildAccount(String code, AccountType type) {
@@ -157,15 +164,15 @@ class LedgerPersistenceServiceImplTest {
             verify(hashChainService).getLatestHash(TENANT_ID, POSTED_DATE.getYear());
             verify(hashChainService).computeHash(any(), anyString(), any(), any());
             verify(journalEntryRepository).save(any(JournalEntry.class));
-            verify(ledgerLockingService, org.mockito.Mockito.times(2)).updateAccountBalance(any(), anyLong());
         }
 
-        @Test
+@Test
         @DisplayName("should set REVERSAL status when reversalOfId is set")
         void shouldSetReversalStatus() {
             UUID reversalOfId = UUID.randomUUID();
             List<DraftJournalLine> lines = List.of(
-                    DraftJournalLine.builder().accountCode("CASH").amountCents(500L).baseAmountCents(500L).isCredit(false).build());
+                    DraftJournalLine.builder().accountCode("CASH").amountCents(500L).baseAmountCents(500L).isCredit(false).build(),
+                    DraftJournalLine.builder().accountCode("REV").amountCents(500L).baseAmountCents(500L).isCredit(true).build());
             DraftJournalEntry draft = buildDraft(lines, reversalOfId);
             stubSequenceAndHash();
             stubAccountLookups(lines);
@@ -185,12 +192,11 @@ class LedgerPersistenceServiceImplTest {
         @DisplayName("should use baseAmountCents when provided for multi-currency")
         void shouldUseBaseAmountForMultiCurrency() {
             List<DraftJournalLine> lines = List.of(
-                    DraftJournalLine.builder().accountCode("CASH").amountCents(1000L).baseAmountCents(950L).isCredit(false).build());
+                    DraftJournalLine.builder().accountCode("CASH").amountCents(1000L).baseAmountCents(950L).isCredit(false).build(),
+                    DraftJournalLine.builder().accountCode("REV").amountCents(1000L).baseAmountCents(950L).isCredit(true).build());
             DraftJournalEntry draft = buildDraft(lines);
             stubSequenceAndHash();
-            Account cashAcct = buildAccount("CASH", AccountType.ASSET);
-            when(accountRepository.findByTenantIdAndCode(TENANT_ID, "CASH"))
-                    .thenReturn(Optional.of(cashAcct));
+            stubAccountLookups(lines);
             when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(inv -> {
                 JournalEntry e = inv.getArgument(0);
                 e.setId(UUID.randomUUID());
@@ -214,7 +220,8 @@ class LedgerPersistenceServiceImplTest {
         @DisplayName("should throw AccountNotFoundException when account not found")
         void shouldThrowWhenAccountNotFound() {
             List<DraftJournalLine> lines = List.of(
-                    DraftJournalLine.builder().accountCode("MISSING").amountCents(100L).isCredit(false).build());
+                    DraftJournalLine.builder().accountCode("MISSING").amountCents(100L).baseAmountCents(100L).isCredit(false).build(),
+                    DraftJournalLine.builder().accountCode("REV").amountCents(100L).baseAmountCents(100L).isCredit(true).build());
             DraftJournalEntry draft = buildDraft(lines);
             stubSequenceAndHash();
             when(accountRepository.findByTenantIdAndCode(TENANT_ID, "MISSING"))
@@ -233,7 +240,8 @@ class LedgerPersistenceServiceImplTest {
         @DisplayName("should allocate next sequence number and increment")
         void shouldAllocateAndIncrement() {
             List<DraftJournalLine> lines = List.of(
-                    DraftJournalLine.builder().accountCode("CASH").amountCents(100L).baseAmountCents(100L).isCredit(false).build());
+                    DraftJournalLine.builder().accountCode("CASH").amountCents(100L).baseAmountCents(100L).isCredit(false).build(),
+                    DraftJournalLine.builder().accountCode("REV").amountCents(100L).baseAmountCents(100L).isCredit(true).build());
             DraftJournalEntry draft = buildDraft(lines);
             when(journalSequenceRepository.initializeIfAbsent(TENANT_ID, 2026)).thenReturn(1);
             JournalSequence seq = new JournalSequence();
@@ -242,9 +250,7 @@ class LedgerPersistenceServiceImplTest {
                     .thenReturn(Optional.of(seq));
             when(hashChainService.getLatestHash(TENANT_ID, 2026)).thenReturn("prev");
             when(hashChainService.computeHash(any(), anyString(), any(), any())).thenReturn("hash");
-            Account cash = buildAccount("CASH", AccountType.ASSET);
-            when(accountRepository.findByTenantIdAndCode(TENANT_ID, "CASH"))
-                    .thenReturn(Optional.of(cash));
+            stubAccountLookups(lines);
             when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(inv -> {
                 JournalEntry e = inv.getArgument(0);
                 e.setId(UUID.randomUUID());

@@ -11,13 +11,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Repository
@@ -34,14 +33,14 @@ public class BatchJournalRepository {
                 transaction_date, description, reference_id, status, reversal_of_id,
                 transaction_currency, base_currency, exchange_rate, created_by,
                 created_at, previous_hash, hash, fiscal_year, sequence_number, auto_reverse
-            ) FROM STDIN WITH (FORMAT csv, DELIMITER ',')
+            ) FROM STDIN WITH (FORMAT csv, DELIMITER ',', NULL 'NULL')
             """;
 
     private static final String COPY_JOURNAL_LINE_SQL = """
             COPY fis_journal_line (
                 line_id, journal_entry_id, account_id, amount, base_amount,
                 is_credit, dimensions, created_at
-            ) FROM STDIN WITH (FORMAT csv, DELIMITER ',')
+            ) FROM STDIN WITH (FORMAT csv, DELIMITER ',', NULL 'NULL')
             """;
 
     private static final String INSERT_JOURNAL_ENTRY_SQL = """
@@ -124,7 +123,6 @@ public class BatchJournalRepository {
 
             for (JournalEntry entry : entries) {
                 entryData.append(formatEntryCsv(entry)).append("\n");
-
                 for (JournalLine line : entry.getLines()) {
                     lineData.append(formatLineCsv(line)).append("\n");
                 }
@@ -133,14 +131,21 @@ public class BatchJournalRepository {
             try (PreparedStatement entryCopyStmt = conn.prepareStatement(COPY_JOURNAL_ENTRY_SQL);
                  PreparedStatement lineCopyStmt = conn.prepareStatement(COPY_JOURNAL_LINE_SQL)) {
 
-                entryCopyStmt.executeUpdate();
-                lineCopyStmt.executeUpdate();
+                byte[] entryBytes = entryData.toString().getBytes();
+                byte[] lineBytes = lineData.toString().getBytes();
+
+                entryCopyStmt.setBinaryStream(1, new ByteArrayInputStream(entryBytes), entryBytes.length);
+                lineCopyStmt.setBinaryStream(1, new ByteArrayInputStream(lineBytes), lineBytes.length);
+
+                int entryCount = entryCopyStmt.executeUpdate();
+                int lineCount = lineCopyStmt.executeUpdate();
 
                 conn.commit();
 
-                meterRegistry.counter("fis.batch.entries.copied").increment(entries.size());
-                meterRegistry.counter("fis.batch.lines.copied")
-                        .increment(entries.stream().mapToInt(e -> e.getLines().size()).sum());
+                meterRegistry.counter("fis.batch.entries.copied").increment(entryCount);
+                meterRegistry.counter("fis.batch.lines.copied").increment(lineCount);
+
+                log.debug("COPY inserted {} entries with {} lines", entryCount, lineCount);
             }
         } catch (Exception e) {
             log.error("COPY batch insert failed for {} entries", entries.size(), e);
@@ -181,7 +186,7 @@ public class BatchJournalRepository {
         stmt.setLong(4, line.getAmount());
         stmt.setLong(5, line.getBaseAmount());
         stmt.setBoolean(6, line.isCredit());
-        stmt.setString(7, line.getDimensions() != null ? toJson(line.getDimensions()) : null);
+        stmt.setString(7, line.getDimensions() != null ? toJson(line.getDimensions()) : "NULL");
         stmt.setTimestamp(8, Timestamp.from(line.getCreatedAt().toInstant()));
     }
 
@@ -196,7 +201,7 @@ public class BatchJournalRepository {
                 escapeCsv(entry.getDescription()),
                 escapeCsv(entry.getReferenceId()),
                 escapeCsv(entry.getStatus().name()),
-                escapeCsv(entry.getReversalOfId() != null ? entry.getReversalOfId().toString() : ""),
+                entry.getReversalOfId() != null ? escapeCsv(entry.getReversalOfId().toString()) : "NULL",
                 escapeCsv(entry.getTransactionCurrency()),
                 escapeCsv(entry.getBaseCurrency()),
                 entry.getExchangeRate().toString(),
@@ -218,16 +223,16 @@ public class BatchJournalRepository {
                 String.valueOf(line.getAmount()),
                 String.valueOf(line.getBaseAmount()),
                 String.valueOf(line.isCredit()),
-                escapeCsv(line.getDimensions() != null ? toJson(line.getDimensions()) : ""),
+                line.getDimensions() != null ? escapeCsv(toJson(line.getDimensions())) : "NULL",
                 line.getCreatedAt().toInstant().toString()
         );
     }
 
     private String escapeCsv(String value) {
         if (value == null) {
-            return "";
+            return "NULL";
         }
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\\")) {
             return "\"" + value.replace("\"", "\"\"") + "\"";
         }
         return value;
@@ -235,10 +240,10 @@ public class BatchJournalRepository {
 
     private String toJson(Map<String, String> map) {
         if (map == null || map.isEmpty()) {
-            return null;
+            return "NULL";
         }
         return map.entrySet().stream()
                 .map(e -> "\"" + e.getKey() + "\":\"" + e.getValue() + "\"")
-                .collect(Collectors.joining(",", "{", "}"));
+                .collect(java.util.stream.Collectors.joining(",", "{", "}"));
     }
 }

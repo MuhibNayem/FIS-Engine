@@ -8,12 +8,12 @@ import com.bracit.fisprocess.domain.enums.JournalStatus;
 import com.bracit.fisprocess.domain.model.DraftJournalEntry;
 import com.bracit.fisprocess.domain.model.DraftJournalLine;
 import com.bracit.fisprocess.exception.AccountNotFoundException;
+import com.bracit.fisprocess.exception.UnbalancedEntryException;
 import com.bracit.fisprocess.repository.AccountRepository;
 import com.bracit.fisprocess.repository.BatchJournalRepository;
 import com.bracit.fisprocess.repository.JournalEntryRepository;
 import com.bracit.fisprocess.repository.JournalSequenceRepository;
 import com.bracit.fisprocess.service.HashChainService;
-import com.bracit.fisprocess.service.LedgerLockingService;
 import com.bracit.fisprocess.service.LedgerPersistenceService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -25,19 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Atomic persistence of journal entries with balance updates and hash chain
- * computation.
- * <p>
- * All operations occur within a single {@code @Transactional} boundary.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -47,60 +40,34 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
         private final AccountRepository accountRepository;
         private final JournalSequenceRepository journalSequenceRepository;
         private final HashChainService hashChainService;
-        private final LedgerLockingService ledgerLockingService;
         private final BatchJournalRepository batchJournalRepository;
         private final MeterRegistry meterRegistry;
 
         @Value("${fis.batch.enabled:false}")
         private boolean batchEnabled;
 
+        @Value("${fis.batch.use-copy:true}")
+        private boolean useCopy;
+
         @Override
         @Transactional
         public JournalEntry persist(DraftJournalEntry draft) {
+                validateBalance(draft);
                 long lockWaitStartNanos = System.nanoTime();
-                // Serialize sequence + hash-chain writes on tenant/fiscal-year key.
                 int fiscalYear = draft.getPostedDate().getYear();
                 long sequenceNumber = allocateSequenceNumber(draft.getTenantId(), fiscalYear);
                 long lockWaitNanos = System.nanoTime() - lockWaitStartNanos;
                 meterRegistry.timer("fis.hash.chain.lock.wait").record(lockWaitNanos, TimeUnit.NANOSECONDS);
-                meterRegistry.timer("fis.hash.chain.sequence.lock.wait").record(lockWaitNanos, TimeUnit.NANOSECONDS);
                 log.debug("Acquired fiscal-year sequence lock for tenant='{}', fiscalYear='{}' in {} ms",
                                 draft.getTenantId(), fiscalYear, lockWaitNanos / 1_000_000.0);
 
-                // 1. Get the previous hash for fiscal-year chain continuity.
                 String previousHash = hashChainService.getLatestHash(draft.getTenantId(), fiscalYear);
-
-                // Precompute immutable identity fields so the row is insert-only.
                 UUID journalEntryId = UUID.randomUUID();
                 OffsetDateTime createdAt = OffsetDateTime.now();
-                // Hash now includes journal line content for tamper detection
                 String hash = hashChainService.computeHash(journalEntryId, previousHash, createdAt, draft.getLines());
 
-                // 2. Build the JournalEntry entity
-                JournalEntry journalEntry = JournalEntry.builder()
-                                .id(journalEntryId)
-                                .tenantId(draft.getTenantId())
-                                .eventId(draft.getEventId())
-                                .postedDate(draft.getPostedDate())
-                                .effectiveDate(draft.getEffectiveDate())
-                                .transactionDate(draft.getTransactionDate())
-                                .description(draft.getDescription())
-                                .referenceId(draft.getReferenceId())
-                                .status(draft.getReversalOfId() != null ? JournalStatus.REVERSAL : JournalStatus.POSTED)
-                                .reversalOfId(draft.getReversalOfId())
-                                .transactionCurrency(draft.getTransactionCurrency())
-                                .baseCurrency(draft.getBaseCurrency())
-                                .exchangeRate(draft.getExchangeRate())
-                                .createdBy(draft.getCreatedBy())
-                                .createdAt(createdAt)
-                                .previousHash(previousHash)
-                                .hash(hash)
-                                .fiscalYear(fiscalYear)
-                                .sequenceNumber(sequenceNumber)
-                                .autoReverse(draft.isAutoReverse())
-                                .build();
+                JournalEntry journalEntry = buildJournalEntry(draft, journalEntryId, previousHash, hash, fiscalYear, sequenceNumber, createdAt);
 
-                // 3. Add journal lines
                 for (DraftJournalLine draftLine : draft.getLines()) {
                         Account account = accountRepository
                                         .findByTenantIdAndCode(draft.getTenantId(), draftLine.getAccountCode())
@@ -119,11 +86,8 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
                         journalEntry.addLine(line);
                 }
 
-                // 4. Persist immutably (no follow-up UPDATE on ledger row)
-                journalEntry = journalEntryRepository.save(journalEntry);
-
-                // 5. Update account balances with deterministic lock ordering
-                updateAccountBalances(draft);
+                journalEntryRepository.save(journalEntry);
+                meterRegistry.counter("fis.journal.entries.persisted").increment();
 
                 log.info("Persisted JournalEntry '{}' for tenant '{}' with {} lines",
                                 journalEntry.getId(), draft.getTenantId(), draft.getLines().size());
@@ -138,88 +102,32 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
                         return List.of();
                 }
 
+                for (DraftJournalEntry draft : drafts) {
+                        validateBalance(draft);
+                }
+
                 Timer.Sample sample = Timer.start(meterRegistry);
                 List<JournalEntry> persistedEntries = new ArrayList<>();
                 Map<SequenceKey, SequenceAllocation> allocatedSequences = new ConcurrentHashMap<>();
 
                 try {
-                        for (int i = 0; i < drafts.size(); i++) {
-                                DraftJournalEntry draft = drafts.get(i);
-                                int fiscalYear = draft.getPostedDate().getYear();
-                                SequenceKey key = new SequenceKey(draft.getTenantId(), fiscalYear);
+                        allocateSequenceRanges(drafts, allocatedSequences);
 
-                                if (!allocatedSequences.containsKey(key)) {
-                                        journalSequenceRepository.initializeIfAbsent(draft.getTenantId(), fiscalYear);
-                                        var sequence = journalSequenceRepository.findForUpdate(draft.getTenantId(), fiscalYear)
-                                                .orElseThrow(() -> new IllegalStateException(
-                                                        "Journal sequence missing for tenant=%s fiscalYear=%d"
-                                                                .formatted(draft.getTenantId(), fiscalYear)));
-
-                                        SequenceAllocation alloc = new SequenceAllocation();
-                                        alloc.startSeq = sequence.getNextValue();
-                                        alloc.used = 0;
-                                        allocatedSequences.put(key, alloc);
-                                }
-                        }
-
-                        List<JournalEntry> entriesToSave = new ArrayList<>();
-
-                        for (int i = 0; i < drafts.size(); i++) {
-                                DraftJournalEntry draft = drafts.get(i);
-                                int fiscalYear = draft.getPostedDate().getYear();
-                                SequenceKey key = new SequenceKey(draft.getTenantId(), fiscalYear);
-                                SequenceAllocation alloc = allocatedSequences.get(key);
-
-                                long sequenceNumber = alloc.startSeq + alloc.used;
-                                alloc.used++;
-
-                                String previousHash = hashChainService.getLatestHash(draft.getTenantId(), fiscalYear);
-                                UUID journalEntryId = UUID.randomUUID();
-                                OffsetDateTime createdAt = OffsetDateTime.now();
-                                String hash = hashChainService.computeHash(journalEntryId, previousHash, createdAt, draft.getLines());
-
-                                JournalEntry journalEntry = buildJournalEntry(draft, journalEntryId, previousHash, hash, fiscalYear, sequenceNumber, createdAt);
-                                entriesToSave.add(journalEntry);
-                        }
-
-                        for (int i = 0; i < drafts.size(); i++) {
-                                DraftJournalEntry draft = drafts.get(i);
-                                for (DraftJournalLine draftLine : draft.getLines()) {
-                                        Account account = accountRepository
-                                                        .findByTenantIdAndCode(draft.getTenantId(), draftLine.getAccountCode())
-                                                        .orElseThrow(() -> new AccountNotFoundException(draftLine.getAccountCode()));
-
-                                        JournalEntry matchingEntry = entriesToSave.get(i);
-
-                                        JournalLine line = JournalLine.builder()
-                                                        .account(account)
-                                                        .amount(draftLine.getAmountCents())
-                                                        .baseAmount(draftLine.getBaseAmountCents() != null
-                                                                        ? draftLine.getBaseAmountCents()
-                                                                        : draftLine.getAmountCents())
-                                                        .isCredit(draftLine.isCredit())
-                                                        .dimensions(draftLine.getDimensions())
-                                                        .build();
-
-                                        matchingEntry.addLine(line);
-                                }
-                        }
+                        List<JournalEntry> entriesToSave = buildJournalEntries(drafts, allocatedSequences);
 
                         if (batchEnabled) {
-                                batchJournalRepository.batchInsertEntries(entriesToSave);
+                                if (useCopy) {
+                                        batchJournalRepository.copyFromEntries(entriesToSave);
+                                } else {
+                                        batchJournalRepository.batchInsertEntries(entriesToSave);
+                                }
                         } else {
                                 for (JournalEntry entry : entriesToSave) {
                                         journalEntryRepository.save(entry);
                                 }
                         }
 
-                        for (DraftJournalEntry draft : drafts) {
-                                updateAccountBalances(draft);
-                        }
-
-                        for (SequenceAllocation alloc : allocatedSequences.values()) {
-                                alloc.committed = true;
-                        }
+                        markSequencesCommitted(allocatedSequences);
 
                         persistedEntries.addAll(entriesToSave);
 
@@ -237,6 +145,112 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
                         throw new RuntimeException("Failed to persist batch: " + e.getMessage(), e);
                 } finally {
                         sample.stop(Timer.builder("fis.batch.duration").register(meterRegistry));
+                }
+        }
+
+        private void allocateSequenceRanges(List<DraftJournalEntry> drafts, Map<SequenceKey, SequenceAllocation> allocatedSequences) {
+                for (int i = 0; i < drafts.size(); i++) {
+                        DraftJournalEntry draft = drafts.get(i);
+                        int fiscalYear = draft.getPostedDate().getYear();
+                        SequenceKey key = new SequenceKey(draft.getTenantId(), fiscalYear);
+
+                        if (!allocatedSequences.containsKey(key)) {
+                                journalSequenceRepository.initializeIfAbsent(draft.getTenantId(), fiscalYear);
+                                var sequence = journalSequenceRepository.findForUpdate(draft.getTenantId(), fiscalYear)
+                                        .orElseThrow(() -> new IllegalStateException(
+                                                "Journal sequence missing for tenant=%s fiscalYear=%d"
+                                                        .formatted(draft.getTenantId(), fiscalYear)));
+
+                                SequenceAllocation alloc = new SequenceAllocation();
+                                alloc.startSeq = sequence.getNextValue();
+                                alloc.used = 0;
+                                allocatedSequences.put(key, alloc);
+                        }
+
+                        SequenceAllocation alloc = allocatedSequences.get(key);
+                        alloc.used++;
+                }
+
+                for (Map.Entry<SequenceKey, SequenceAllocation> entry : allocatedSequences.entrySet()) {
+                        SequenceKey key = entry.getKey();
+                        SequenceAllocation alloc = entry.getValue();
+                        journalSequenceRepository.findForUpdate(key.tenantId, key.fiscalYear)
+                                .ifPresent(seq -> {
+                                        seq.setNextValue(alloc.startSeq + alloc.used);
+                                        journalSequenceRepository.save(seq);
+                                });
+                }
+        }
+
+        private List<JournalEntry> buildJournalEntries(List<DraftJournalEntry> drafts, Map<SequenceKey, SequenceAllocation> allocatedSequences) {
+                List<JournalEntry> entriesToSave = new ArrayList<>();
+
+                for (int i = 0; i < drafts.size(); i++) {
+                        DraftJournalEntry draft = drafts.get(i);
+                        int fiscalYear = draft.getPostedDate().getYear();
+                        SequenceKey key = new SequenceKey(draft.getTenantId(), fiscalYear);
+                        SequenceAllocation alloc = allocatedSequences.get(key);
+
+                        long sequenceNumber = alloc.startSeq + alloc.used;
+                        alloc.used++;
+
+                        String previousHash = hashChainService.getLatestHash(draft.getTenantId(), fiscalYear);
+                        UUID journalEntryId = UUID.randomUUID();
+                        OffsetDateTime createdAt = OffsetDateTime.now();
+                        String hash = hashChainService.computeHash(journalEntryId, previousHash, createdAt, draft.getLines());
+
+                        JournalEntry journalEntry = buildJournalEntry(draft, journalEntryId, previousHash, hash, fiscalYear, sequenceNumber, createdAt);
+                        entriesToSave.add(journalEntry);
+                }
+
+                for (int i = 0; i < drafts.size(); i++) {
+                        DraftJournalEntry draft = drafts.get(i);
+                        for (DraftJournalLine draftLine : draft.getLines()) {
+                                Account account = accountRepository
+                                                .findByTenantIdAndCode(draft.getTenantId(), draftLine.getAccountCode())
+                                                .orElseThrow(() -> new AccountNotFoundException(draftLine.getAccountCode()));
+
+                                JournalEntry matchingEntry = entriesToSave.get(i);
+
+                                JournalLine line = JournalLine.builder()
+                                                .account(account)
+                                                .amount(draftLine.getAmountCents())
+                                                .baseAmount(draftLine.getBaseAmountCents() != null
+                                                                ? draftLine.getBaseAmountCents()
+                                                                : draftLine.getAmountCents())
+                                                .isCredit(draftLine.isCredit())
+                                                .dimensions(draftLine.getDimensions())
+                                                .build();
+
+                                matchingEntry.addLine(line);
+                        }
+                }
+
+                return entriesToSave;
+        }
+
+        private void markSequencesCommitted(Map<SequenceKey, SequenceAllocation> allocatedSequences) {
+                for (SequenceAllocation alloc : allocatedSequences.values()) {
+                        alloc.committed = true;
+                }
+        }
+
+        private void validateBalance(DraftJournalEntry draft) {
+                long totalDebits = draft.getLines().stream()
+                                .filter(l -> !l.isCredit())
+                                .mapToLong(l -> l.getBaseAmountCents() != null ? l.getBaseAmountCents() : l.getAmountCents())
+                                .sum();
+                long totalCredits = draft.getLines().stream()
+                                .filter(DraftJournalLine::isCredit)
+                                .mapToLong(l -> l.getBaseAmountCents() != null ? l.getBaseAmountCents() : l.getAmountCents())
+                                .sum();
+
+                if (totalDebits != totalCredits) {
+                        throw new UnbalancedEntryException(totalDebits, totalCredits);
+                }
+
+                if (totalDebits == 0) {
+                        throw new UnbalancedEntryException("Journal entry has zero debits and credits");
                 }
         }
 
@@ -314,58 +328,5 @@ public class LedgerPersistenceServiceImpl implements LedgerPersistenceService {
                 sequence.setNextValue(allocated + 1);
                 journalSequenceRepository.save(sequence);
                 return allocated;
-        }
-
-        /**
-         * Updates account balances with deterministic lock ordering (sorted by account
-         * code)
-         * to prevent deadlocks under concurrent multi-account postings.
-         * <p>
-         * CRITICAL: Uses base-currency amounts (baseAmountCents) to ensure account
-         * balances are tracked in a consistent currency. Using transaction currency
-         * amounts would corrupt balances in multi-currency scenarios.
-         */
-        private void updateAccountBalances(DraftJournalEntry draft) {
-                // Sort lines by account code for deterministic lock ordering
-                List<DraftJournalLine> sortedLines = draft.getLines().stream()
-                                .sorted(Comparator.comparing(DraftJournalLine::getAccountCode))
-                                .toList();
-
-                for (DraftJournalLine line : sortedLines) {
-                        Account account = accountRepository
-                                        .findByTenantIdAndCode(draft.getTenantId(), line.getAccountCode())
-                                        .orElseThrow(() -> new AccountNotFoundException(line.getAccountCode()));
-
-                        // Use base-currency amount for balance consistency across currencies
-                        long baseAmountCents = line.getBaseAmountCents() != null
-                                        ? line.getBaseAmountCents()
-                                        : line.getAmountCents();
-
-                        long delta = computeBalanceDelta(account.getAccountType(), account.isContra(),
-                                        baseAmountCents, line.isCredit());
-                        ledgerLockingService.updateAccountBalance(account.getAccountId(), delta);
-                }
-        }
-
-        /**
-         * Computes the balance delta based on account type and debit/credit direction.
-         * <p>
-         * Normal balances:
-         * <ul>
-         * <li>ASSET, EXPENSE: Debit increases, Credit decreases</li>
-         * <li>LIABILITY, EQUITY, REVENUE: Credit increases, Debit decreases</li>
-         * </ul>
-         */
-        private long computeBalanceDelta(AccountType accountType, boolean isContra, long amount, boolean isCredit) {
-                boolean isNormalDebit = accountType == AccountType.ASSET || accountType == AccountType.EXPENSE;
-                if (isContra) {
-                        isNormalDebit = !isNormalDebit;
-                }
-
-                if (isNormalDebit) {
-                        return isCredit ? -amount : amount;
-                } else {
-                        return isCredit ? amount : -amount;
-                }
         }
 }

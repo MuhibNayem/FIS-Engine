@@ -119,7 +119,7 @@ fis:
     enabled: ${FIS_BATCH_ENABLED:false}
     max-size: ${FIS_BATCH_MAX_SIZE:100}
     flush-interval-ms: ${FIS_BATCH_FLUSH_INTERVAL_MS:10}
-    use-copy: ${FIS_BATCH_USE_COPY:false}
+    use-copy: ${FIS_BATCH_USE_COPY:true}
     worker-concurrency: ${FIS_BATCH_WORKER_CONCURRENCY:10}
   coalescer:
     enabled: ${FIS_COALESCER_ENABLED:true}
